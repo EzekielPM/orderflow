@@ -196,7 +196,7 @@ export default function Home() {
 
     const params = new URLSearchParams(window.location.search)
     const hasPaymentReturn = params.has('reference')
-    const hasPublicOrder = params.has('order')
+    const hasPublicOrder = params.has('order') || params.has('track')
     const timer = hasPaymentReturn || hasPublicOrder
       ? null
       : setTimeout(() => setScreen('welcome'), 1800)
@@ -206,7 +206,8 @@ export default function Home() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const token = params.get('order')
+    const trackingToken = params.get('track')
+const token = params.get('order') || trackingToken
 
     if (!token) return
     if (params.has('reference')) return
@@ -220,13 +221,34 @@ export default function Home() {
     setPublicOrderLoading(true)
     setScreen('public-loading')
 
-    supabase.rpc('get_public_order', { p_token: token }).maybeSingle()
-      .then(({ data, error }) => {
+        Promise.all([
+      supabase
+        .rpc('get_public_order', { p_token: token })
+        .maybeSingle(),
+
+      trackingToken
+        ? supabase
+            .rpc('get_public_order_tracking', {
+              p_token: token,
+            })
+            .maybeSingle()
+        : Promise.resolve({
+            data: null,
+            error: null,
+          }),
+    ])
+      .then(([orderResult, trackingResult]) => {
+        const { data, error } = orderResult
+
         if (error || !data) {
-          setNotice('This order link is invalid or no longer available.')
+          setNotice(
+            'This order link is invalid or no longer available.'
+          )
           setScreen('public-error')
           return
-        } 
+        }
+
+        const liveStatus = trackingResult.data
 
         setSelected({
           id: data.order_number,
@@ -237,10 +259,14 @@ export default function Home() {
           qty: data.quantity,
           unitPrice: Number(data.unit_price),
           deliveryFee: Number(data.delivery_fee),
-          amount: Number(data.unit_price) * Number(data.quantity) + Number(data.delivery_fee),
+          amount:
+            Number(data.unit_price) * Number(data.quantity)
+            + Number(data.delivery_fee),
           address: data.delivery_address,
-          status: data.status,
+          status: liveStatus?.status || data.status,
           createdAt: data.created_at,
+          updatedAt: liveStatus?.updated_at,
+          paymentStatus: liveStatus?.payment_status,
         })
 
         setDraft(current => ({
@@ -256,10 +282,17 @@ export default function Home() {
 
         setMerchant(current => ({
           ...current,
-          business: data.merchant_business || 'OrderFlow merchant',
+          business:
+            data.merchant_business
+            || 'OrderFlow merchant',
+          phone:
+            liveStatus?.merchant_phone
+            || current.phone,
         }))
 
-        setScreen('confirm')
+        setScreen(
+          trackingToken ? 'tracking' : 'confirm'
+        )
       })
       .finally(() => setPublicOrderLoading(false))
   }, [])
@@ -737,6 +770,20 @@ export default function Home() {
     setNotice('Order status refreshed')
   }
 
+  const openTracking = () => {
+    if (selected?.publicToken) {
+      window.history.replaceState(
+        {},
+        '',
+        `/?track=${encodeURIComponent(
+          selected.publicToken
+        )}`
+      )
+    }
+
+    go('tracking')
+    setTimeout(refreshTracking, 0)
+  }
   const contactSeller = () => {
     const phone = String(merchant.phone || '')
       .replace(/\D/g, '')
@@ -1320,7 +1367,9 @@ export default function Home() {
 
   if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form payment-form"><div className="payment-summary"><span>Amount to pay</span><strong>{naira.format(total || 18500)}</strong><small>Protected checkout · Test mode</small></div><label className={`choice ${paymentMethod === 'paystack' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => { setPaymentMethod('paystack'); setNotice('') }}/><span><b>Paystack checkout</b><small>Card, USSD and mobile money</small></span><em>Recommended</em></label><label className={`choice ${paymentMethod === 'bank-transfer' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'bank-transfer'} onChange={() => { setPaymentMethod('bank-transfer'); setNotice('') }}/><span><b>Bank transfer</b><small>Pay securely by transfer through Paystack</small></span></label><label className={`choice ${paymentMethod === 'escrow' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'escrow'} onChange={() => setPaymentMethod('escrow')}/><span><b>Protected payment (Escrow)</b><small>Funds released after delivery · Coming soon</small></span></label><label className={`choice ${paymentMethod === 'opay' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required · Coming soon</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : paymentMethod === 'escrow' || paymentMethod === 'opay' ? 'Check availability' : `Pay ${naira.format(total || 18500)}`}</button><small className="center payment-note">Paystack is currently in test mode. No real money will be charged.</small></section></AppShell>
 
-  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={() => { go('tracking'); setTimeout(refreshTracking, 0) }}>Track my order</button><button className="secondary" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
+  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><<button onClick={openTracking}>
+  Track my order
+</button><button className="secondary" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
 
   if (screen === 'tracking') {
     const status = selected?.status || 'Pending'
