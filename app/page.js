@@ -4,18 +4,35 @@ import { useEffect, useMemo, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 
 const seedOrders = [
-  { id: 'OF-1024', name: 'Ada Okafor', item: 'Leather handbag', qty: 1, amount: 18500, channel: 'Instagram', status: 'Pending' },
-  { id: 'OF-1023', name: 'Tunde Bello', item: 'Wireless earbuds', qty: 1, amount: 7000, channel: 'WhatsApp', status: 'Confirmed' },
-  { id: 'OF-1022', name: 'Mariam Musa', item: 'Skincare bundle', qty: 3, amount: 31200, channel: 'WhatsApp', status: 'Delivered' },
+  { id: 'OF-1024', name: 'Ada Okafor', item: 'Leather handbag', qty: 1, amount: 18500, channel: 'Instagram', status: 'Pending', createdAt: '2026-09-21T10:42:00+01:00' },
+  { id: 'OF-1023', name: 'Tunde Bello', item: 'Wireless earbuds', qty: 1, amount: 7000, channel: 'WhatsApp', status: 'Confirmed', createdAt: '2026-09-20T16:18:00+01:00' },
+  { id: 'OF-1022', name: 'Mariam Musa', item: 'Skincare bundle', qty: 3, amount: 31200, channel: 'WhatsApp', status: 'Delivered', createdAt: '2026-09-12T14:05:00+01:00' },
 ]
 
 function AppShell({ children, back, title, onBack }) {
+  const [theme, setTheme] = useState('light')
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('orderflow-theme')
+    const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    const nextTheme = savedTheme || preferred
+    setTheme(nextTheme)
+    document.documentElement.dataset.theme = nextTheme
+  }, [])
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(nextTheme)
+    document.documentElement.dataset.theme = nextTheme
+    localStorage.setItem('orderflow-theme', nextTheme)
+  }
+
   return (
     <main className="phone">
       <header className="topbar">
         {back ? <button className="icon" onClick={() => onBack(back)} aria-label="Go back">←</button> : <span />}
         {title && <strong>{title}</strong>}
-        <span />
+        <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span></button>
       </header>
       {children}
     </main>
@@ -24,6 +41,14 @@ function AppShell({ children, back, title, onBack }) {
 
 function OrderFlowLogo({ compact = false }) {
   return <div className={`orderflow-logo${compact ? ' compact' : ''}`} aria-label="OrderFlow"><span className="logo-symbol"><i /><i /><i /></span><strong>Order<span>Flow</span></strong></div>
+}
+
+function ScreenAccent({ type = 'orders' }) {
+  return <div className={`screen-accent ${type}`} aria-hidden="true"><span /><span /><span /></div>
+}
+
+function BellIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
 }
 
 function MerchantNav({ active, onNavigate }) {
@@ -50,6 +75,7 @@ function MerchantNav({ active, onNavigate }) {
 }
 
 const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 })
+const orderDate = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 
 export default function Home() {
   const [screen, setScreen] = useState('splash')
@@ -65,6 +91,7 @@ export default function Home() {
   const [rememberMe, setRememberMe] = useState(true)
   const [paymentBusy, setPaymentBusy] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('paystack')
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('orderflow-state')
@@ -120,6 +147,7 @@ export default function Home() {
         amount: Number(order.unit_price) * order.quantity + Number(order.delivery_fee),
         channel: order.channel,
         status: order.status,
+        createdAt: order.created_at,
       })))
     }
     loadAccount()
@@ -193,7 +221,7 @@ export default function Home() {
         delivery_fee: Number(draft.delivery || 0),
       }).select().single()
       if (error) return setNotice(error.message)
-      setSelected({ id: data.order_number, databaseId: data.id, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, amount: total, channel: data.channel, status: data.status })
+      setSelected({ id: data.order_number, databaseId: data.id, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, amount: total, channel: data.channel, status: data.status, createdAt: data.created_at || new Date().toISOString() })
     }
     go('link')
   }
@@ -261,7 +289,7 @@ export default function Home() {
 
   if (screen === 'setup') return <AppShell onBack={go} back="signup" title="Set up your business"><section className="form"><h1>Make OrderFlow yours</h1><label><span>Business name</span><input value={merchant.business} onChange={e => setMerchant({ ...merchant, business: e.target.value })} /></label><label><span>What do you sell?</span><select><option>Fashion and accessories</option><option>Beauty and personal care</option><option>Food and drinks</option><option>Services</option></select></label><label><span>WhatsApp business number</span><input placeholder="0801 234 5678" /></label>{notice && <div className="notice">{notice}</div>}<button onClick={completeSetup}>Complete setup</button></section></AppShell>
 
-  if (screen === 'dashboard') return <AppShell onBack={go}><section className="dashboard"><div className="dash-head"><div><div className="brand">OrderFlow</div><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div><button className="avatar avatar-button" onClick={() => go('profile')} aria-label="Open profile">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</button></div><button onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>4</b></div><div><span>Active</span><b>7</b></div><div><span>Issues</span><b>1</b></div></div><div className="section-title"><h2>Recent orders</h2><span>View all</span></div><div className="orders">{orders.map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.qty} item{order.qty > 1 ? 's' : ''} · {naira.format(order.amount)}</span><small>{order.channel} · Today</small></div><em className={order.status.toLowerCase()}>{order.status}</em></button>)}</div></section><MerchantNav active="dashboard" onNavigate={go}/></AppShell>
+  if (screen === 'dashboard') return <AppShell onBack={go}><section className="dashboard"><div className="dash-head"><div><OrderFlowLogo compact /><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div><div className="header-actions"><button className="notification-button" onClick={() => setNotificationsOpen(value => !value)} aria-label="Open notifications"><BellIcon /><span /></button><button className="avatar avatar-button" onClick={() => go('profile')} aria-label="Open profile">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</button></div></div>{notificationsOpen && <aside className="notification-panel"><div><strong>Notifications</strong><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications">×</button></div><p><b>Payment received</b><span>Order OF-1023 has been confirmed.</span></p><p><b>New order created</b><span>OF-1024 is awaiting payment.</span></p></aside>}<ScreenAccent type="orders" /><button onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>4</b></div><div><span>Active</span><b>7</b></div><div><span>Issues</span><b>1</b></div></div><div className="section-title"><h2>Recent orders</h2><span>View all</span></div><div className="orders">{orders.map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.qty} item{order.qty > 1 ? 's' : ''} · {naira.format(order.amount)}</span><small>{order.channel} · {orderDate.format(new Date(order.createdAt || Date.now()))}</small></div><em className={order.status.toLowerCase()}>{order.status}</em></button>)}</div></section><MerchantNav active="dashboard" onNavigate={go}/></AppShell>
 
   if (screen === 'create') return <AppShell onBack={go} back="dashboard" title="Create order"><section className="form"><p className="step">Step 1 of 2 · Order details</p>{field('name','Customer name','text','Enter customer’s name')}{field('phone','Phone number','tel','0801 234 5678')}{field('item','Item or service','text','e.g. Leather handbag')}<div className="two">{field('qty','Quantity','number')}{field('price','Unit price','number','₦ 0.00')}</div>{field('delivery','Delivery fee','number','₦ 0.00')}<div className="total"><span>Order total</span><b>{naira.format(total)}</b></div><button disabled={!draft.name || !draft.item || !draft.price} onClick={() => go('review')}>Continue</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
 
@@ -283,11 +311,11 @@ export default function Home() {
 
   if (screen === 'tracking') return <AppShell onBack={go} back="paid"><section className="form"><div className="brand center">OrderFlow</div><h1>Your order is on the way</h1><p>Last updated today, 2:30 PM</p><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>Total</span><b>{naira.format(total || 18500)}</b></p></article><h2>Order progress</h2><div className="timeline"><p className="done"><b>Order confirmed</b><span>You confirmed the details</span></p><p className="done"><b>Payment received</b><span>Seller confirmed your payment</span></p><p className="current"><b>Out for delivery</b><span>Your package is on the way</span></p><p><b>Delivered</b><span>Waiting for delivery confirmation</span></p></div><button className="secondary">Contact seller</button></section></AppShell>
 
-  if (screen === 'buyers') return <AppShell onBack={go} back="dashboard"><section className="dashboard"><div className="brand">OrderFlow</div><h1>Buyers</h1><p>People who have ordered from your store.</p><input className="search" placeholder="Search name, phone or order ID" />{orders.map(order=><button className="buyer" key={order.id} onClick={()=>{setSelected(order);go('merchant-order')}}><span className="avatar">{order.name.split(' ').map(n=>n[0]).join('')}</span><span><b>{order.name}</b><small>{order.phone || '0801 234 5678'} · {order.channel}</small></span><em>View details</em></button>)}<button onClick={() => go('create')}>Create order for this buyer</button></section><MerchantNav active="buyers" onNavigate={go}/></AppShell>
+  if (screen === 'buyers') return <AppShell onBack={go} back="dashboard"><section className="dashboard"><OrderFlowLogo compact /><ScreenAccent type="buyers" /><h1>Buyers</h1><p>People who have ordered from your store.</p><input className="search" placeholder="Search name, phone or order ID" />{orders.map(order=><button className="buyer" key={order.id} onClick={()=>{setSelected(order);go('merchant-order')}}><span className="avatar">{order.name.split(' ').map(n=>n[0]).join('')}</span><span><b>{order.name}</b><small>{order.phone || '0801 234 5678'} · {orderDate.format(new Date(order.createdAt || Date.now()))}</small></span><em>View details</em></button>)}<button onClick={() => go('create')}>Create order for this buyer</button></section><MerchantNav active="buyers" onNavigate={go}/></AppShell>
 
-  if (screen === 'profile') return <AppShell onBack={go} back="dashboard" title="Profile"><section className="form"><div className="profile-head"><span className="avatar profile-avatar">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</span><div><h1>{merchant.name}</h1><p>{merchant.business}</p></div></div><label><span>Full name</span><input value={merchant.name} onChange={event => setMerchant({ ...merchant, name: event.target.value })}/></label><label><span>Business name</span><input value={merchant.business} onChange={event => setMerchant({ ...merchant, business: event.target.value })}/></label><label><span>Email address</span><input type="email" value={merchant.email || session?.user?.email || ''} onChange={event => setMerchant({ ...merchant, email: event.target.value })}/></label><label><span>Phone number</span><input type="tel" value={merchant.phone || ''} placeholder="0801 234 5678" onChange={event => setMerchant({ ...merchant, phone: event.target.value })}/></label>{notice && <div className="notice">{notice}</div>}<button onClick={saveProfile}>Save profile</button><button className="secondary" onClick={signOut}>Sign out</button></section><MerchantNav active="profile" onNavigate={go}/></AppShell>
+  if (screen === 'profile') return <AppShell onBack={go} back="dashboard" title="Profile"><section className="form profile-form"><ScreenAccent type="profile" /><div className="profile-head"><span className="avatar profile-avatar">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</span><div><h1>{merchant.name}</h1><p>{merchant.business}</p></div></div><label><span>Full name</span><input value={merchant.name} onChange={event => setMerchant({ ...merchant, name: event.target.value })}/></label><label><span>Business name</span><input value={merchant.business} onChange={event => setMerchant({ ...merchant, business: event.target.value })}/></label><label><span>Email address</span><input type="email" value={merchant.email || session?.user?.email || ''} onChange={event => setMerchant({ ...merchant, email: event.target.value })}/></label><label><span>Phone number</span><input type="tel" value={merchant.phone || ''} placeholder="0801 234 5678" onChange={event => setMerchant({ ...merchant, phone: event.target.value })}/></label>{notice && <div className="notice">{notice}</div>}<div className="profile-actions"><button onClick={saveProfile}>Save profile</button><button className="secondary" onClick={signOut}>Sign out</button></div></section><MerchantNav active="profile" onNavigate={go}/></AppShell>
 
-  if (screen === 'merchant-order') return <AppShell onBack={go} back="dashboard" title={`Order ${selected.id}`}><section className="form"><p className="step">Created today, 10:42 AM</p><article className="card"><small>CUSTOMER</small><h3>{selected.name}</h3><p>{selected.phone || '0801 234 5678'}</p></article><article className="card rows"><p><span>{selected.item} × {selected.qty}</span><b>{naira.format(selected.amount - 3500)}</b></p><p><span>Delivery</span><b>{naira.format(3500)}</b></p><p className="strong"><span>Total</span><b>{naira.format(selected.amount)}</b></p></article><label><span>Update progress</span><select value={selected.status} onChange={e=>setSelected({...selected,status:e.target.value})}><option>Pending</option><option>Confirmed</option><option>Payment received</option><option>Out for delivery</option><option>Delivered</option></select></label><button onClick={updateOrderStatus}>Update order status</button>{notice&&<div className="notice">{notice}</div>}</section><MerchantNav active="merchant-order" onNavigate={go}/></AppShell>
+  if (screen === 'merchant-order') return <AppShell onBack={go} back="dashboard" title={`Order ${selected.id}`}><section className="form"><p className="step">Created {orderDate.format(new Date(selected.createdAt || Date.now()))}</p><article className="card"><small>CUSTOMER</small><h3>{selected.name}</h3><p>{selected.phone || '0801 234 5678'}</p></article><article className="card rows"><p><span>{selected.item} × {selected.qty}</span><b>{naira.format(selected.amount - 3500)}</b></p><p><span>Delivery</span><b>{naira.format(3500)}</b></p><p className="strong"><span>Total</span><b>{naira.format(selected.amount)}</b></p></article><label><span>Update progress</span><select value={selected.status} onChange={e=>setSelected({...selected,status:e.target.value})}><option>Pending</option><option>Confirmed</option><option>Payment received</option><option>Out for delivery</option><option>Delivered</option></select></label><button onClick={updateOrderStatus}>Update order status</button>{notice&&<div className="notice">{notice}</div>}</section><MerchantNav active="merchant-order" onNavigate={go}/></AppShell>
 
   return null
 }
