@@ -22,6 +22,10 @@ function AppShell({ children, back, title, onBack }) {
   )
 }
 
+function OrderFlowLogo({ compact = false }) {
+  return <div className={`orderflow-logo${compact ? ' compact' : ''}`} aria-label="OrderFlow"><span className="logo-symbol"><i /><i /><i /></span><strong>Order<span>Flow</span></strong></div>
+}
+
 function MerchantNav({ active, onNavigate }) {
   const items = [
     ['dashboard', 'Home'],
@@ -158,6 +162,15 @@ export default function Home() {
     if (error) setNotice(error.message)
   }
 
+  const resetPassword = async () => {
+    if (!auth.email) return setNotice('Enter your email address first, then tap Forgot password?')
+    if (!supabase) return setNotice('Password reset becomes available when Supabase is connected.')
+    setAuthBusy(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(auth.email, { redirectTo: window.location.origin })
+    setAuthBusy(false)
+    setNotice(error ? error.message : 'Password reset link sent. Check your email.')
+  }
+
   const completeSetup = async () => {
     if (supabase && session) {
       const { error } = await supabase.from('profiles').upsert({ id: session.user.id, full_name: merchant.name, business_name: merchant.business })
@@ -209,7 +222,8 @@ export default function Home() {
   }
 
   const startPayment = async () => {
-    if (paymentMethod === 'opay') return setNotice('OPay setup requires approved merchant API credentials. Choose Paystack for the current test payment.')
+    if (paymentMethod === 'opay') return setNotice('OPay setup requires approved merchant API credentials. Choose Paystack or Bank transfer for this test payment.')
+    if (paymentMethod === 'escrow') return setNotice('Escrow is shown as a planned protected-payment option. It will be activated after the holding and release process is completed.')
     setPaymentBusy(true)
     setNotice('')
     try {
@@ -220,8 +234,13 @@ export default function Home() {
           email: draft.email || auth.email || session?.user?.email || merchant.email,
           amount: total || 18500,
           orderId: selected?.id || 'OF-1025',
+          paymentMethod,
         }),
       })
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        throw new Error(response.status === 404 ? 'Payment service is not available in this deployment. Redeploy the API route and try again.' : 'The payment service returned an invalid response. Please try again.')
+      }
       const result = await response.json()
       if (!response.ok || !result.authorizationUrl) throw new Error(result.message || 'Unable to start payment')
       window.location.assign(result.authorizationUrl)
@@ -231,14 +250,14 @@ export default function Home() {
     }
   }
 
-  if (screen === 'splash') return <main className="splash"><div className="mark">≡</div><h1>OrderFlow</h1><p>Orders made simple.</p></main>
+  if (screen === 'splash') return <main className="splash"><OrderFlowLogo /><p>Orders made simple.</p><div className="splash-pulse" /></main>
 
 
-  if (screen === 'welcome') return <AppShell onBack={go}><section className="welcome"><div className="brand">OrderFlow</div><div className="mark">≡</div><h1>Turn every DM into a confirmed order.</h1><p>Create orders, confirm payments and keep customers updated from one simple place.</p><div className="channels"><span>● WhatsApp</span><span>● Instagram</span></div><button onClick={() => go('signup')}>Create a free account</button><button className="secondary" onClick={() => go('signin')}>Sign in</button></section></AppShell>
+  if (screen === 'welcome') return <AppShell onBack={go}><section className="welcome"><div className="welcome-brand"><OrderFlowLogo compact /></div><div className="welcome-art" aria-hidden="true"><span className="flow-card flow-card-one">New order</span><span className="flow-card flow-card-two">Payment secured</span><span className="flow-card flow-card-three">Ready to deliver</span><div className="flow-mark"><i /><i /><i /></div></div><h1>Turn every DM into a confirmed order.</h1><p>Create orders, receive secure payments and keep every customer updated in one place.</p><div className="channels"><span>● WhatsApp</span><span>● Instagram</span></div><button onClick={() => go('signup')}>Create a free account</button><button className="secondary" onClick={() => go('signin')}>Sign in</button><small className="welcome-trust">Built for independent sellers and growing businesses.</small></section></AppShell>
 
   if (screen === 'signup') return <AppShell onBack={go} back="welcome" title="Create your account"><section className="form"><h1>Let’s get you started</h1>{authField('name','Full name','text','Your full name')}{authField('email','Email address','email','you@business.com')}{authField('password','Password','password','At least 8 characters')}{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.name || !auth.email || auth.password.length < 8} onClick={signUp}>{authBusy ? 'Creating account…' : 'Continue'}</button><p className="center">Already have an account? <a onClick={() => go('signin')}>Sign in</a></p></section></AppShell>
 
-  if (screen === 'signin') return <AppShell onBack={go} back="welcome" title="Welcome back"><section className="form auth-form"><div className="auth-intro"><h1>Sign in to OrderFlow</h1><p>Manage orders, buyers and payments from one place.</p></div><button className="social" onClick={signInWithGoogle}>Continue with Google</button><button className="social" disabled title="Apple Developer membership is required">Continue with Apple · Coming later</button><div className="or"><span>or continue with email</span></div>{authField('email','Email address','email','you@business.com')}<label><span>Password</span><div className="password-field"><input type={showPassword ? 'text' : 'password'} value={auth.password} placeholder="Your password" onChange={event => setAuth({ ...auth, password: event.target.value })}/><button type="button" className="password-toggle" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button></div></label><div className="signin-options"><label className="remember"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)}/><span>Remember me</span></label><button type="button" className="text-button" onClick={() => setNotice('Password reset will be added next.')}>Forgot password?</button></div>{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.email || !auth.password} onClick={signIn}>{authBusy ? 'Signing in…' : 'Sign in'}</button><p className="center">New to OrderFlow? <a onClick={() => go('signup')}>Create an account</a></p>{!isSupabaseConfigured && <small className="center">Demo mode is active until Supabase is connected.</small>}</section></AppShell>
+  if (screen === 'signin') return <AppShell onBack={go} back="welcome"><section className="form auth-form"><div className="auth-logo"><OrderFlowLogo compact /></div><div className="auth-intro"><h1>Welcome back</h1><p>Sign in to manage orders, buyers and payments.</p></div><button className="social" onClick={signInWithGoogle}>Continue with Google</button><button className="social" disabled title="Apple Developer membership is required">Continue with Apple · Coming later</button><div className="or"><span>or continue with email</span></div>{authField('email','Email address','email','you@business.com')}<label><span>Password</span><div className="password-field"><input type={showPassword ? 'text' : 'password'} value={auth.password} placeholder="Your password" onChange={event => setAuth({ ...auth, password: event.target.value })}/><button type="button" className="password-toggle" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button></div></label><div className="signin-options"><label className="remember"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)}/><span>Remember me</span></label><button type="button" className="text-button" onClick={resetPassword}>Forgot password?</button></div>{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.email || !auth.password} onClick={signIn}>{authBusy ? 'Signing in…' : 'Sign in'}</button><p className="center">New to OrderFlow? <a onClick={() => go('signup')}>Create an account</a></p>{!isSupabaseConfigured && <small className="center">Demo mode is active until Supabase is connected.</small>}</section></AppShell>
 
   if (screen === 'setup') return <AppShell onBack={go} back="signup" title="Set up your business"><section className="form"><h1>Make OrderFlow yours</h1><label><span>Business name</span><input value={merchant.business} onChange={e => setMerchant({ ...merchant, business: e.target.value })} /></label><label><span>What do you sell?</span><select><option>Fashion and accessories</option><option>Beauty and personal care</option><option>Food and drinks</option><option>Services</option></select></label><label><span>WhatsApp business number</span><input placeholder="0801 234 5678" /></label>{notice && <div className="notice">{notice}</div>}<button onClick={completeSetup}>Complete setup</button></section></AppShell>
 
@@ -258,7 +277,7 @@ export default function Home() {
 
   if (screen === 'delivery') return <AppShell onBack={go} back="confirm" title="Delivery details"><section className="form"><p>Where should the seller deliver your order?</p>{field('name','Full name')}{field('phone','Phone number','tel')}{field('email','Email address','email','you@example.com')}{field('address','Delivery address','text','Street, area and city')}<div className="total"><span>Order total</span><b>{naira.format(total || 18500)}</b></div><button disabled={!draft.name || !draft.email || !draft.address} onClick={() => go('payment')}>Continue to payment</button></section></AppShell>
 
-  if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form"><p>Pay {naira.format(total || 18500)} securely for this order.</p><label className="choice"><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => setPaymentMethod('paystack')}/><span><b>Paystack</b><small>Card, bank transfer and USSD · Test mode</small></span></label><label className="choice"><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : `Pay ${naira.format(total || 18500)}`}</button><small className="center">Paystack remains in test mode. No real money will be charged.</small></section></AppShell>
+  if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form payment-form"><div className="payment-summary"><span>Amount to pay</span><strong>{naira.format(total || 18500)}</strong><small>Protected checkout · Test mode</small></div><label className={`choice ${paymentMethod === 'paystack' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => { setPaymentMethod('paystack'); setNotice('') }}/><span><b>Paystack checkout</b><small>Card, USSD and mobile money</small></span><em>Recommended</em></label><label className={`choice ${paymentMethod === 'bank-transfer' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'bank-transfer'} onChange={() => { setPaymentMethod('bank-transfer'); setNotice('') }}/><span><b>Bank transfer</b><small>Pay securely by transfer through Paystack</small></span></label><label className={`choice ${paymentMethod === 'escrow' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'escrow'} onChange={() => setPaymentMethod('escrow')}/><span><b>Protected payment (Escrow)</b><small>Funds released after delivery · Coming soon</small></span></label><label className={`choice ${paymentMethod === 'opay' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required · Coming soon</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : paymentMethod === 'escrow' || paymentMethod === 'opay' ? 'Check availability' : `Pay ${naira.format(total || 18500)}`}</button><small className="center payment-note">Paystack is currently in test mode. No real money will be charged.</small></section></AppShell>
 
   if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'OF-1025'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={() => go('tracking')}>Track my order</button><button className="secondary" onClick={() => go('dashboard')}>Back to dashboard</button></section></AppShell>
 
