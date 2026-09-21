@@ -1,4 +1,5 @@
 import './globals.css'
+import './layout-fixes.css'
 
 export const metadata = {
   title: 'OrderFlow',

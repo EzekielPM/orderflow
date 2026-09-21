@@ -1,0 +1,13 @@
+/* Keep the desktop/tablet preview at the same proportions as the mobile design. */
+@media (min-width: 760px) {
+  .phone {
+    height: min(860px, calc(100dvh - 64px));
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .phone .welcome {
+    min-height: 720px;
+  }
+}
