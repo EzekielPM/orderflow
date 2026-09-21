@@ -1,3 +1,4 @@
+
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -395,8 +396,8 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: draft.email || auth.email || session?.user?.email || merchant.email,
-          amount: total || 18500,
           orderId: selected?.id || 'OF-1025',
+          orderToken: selected?.publicToken,
           paymentMethod,
         }),
       })
