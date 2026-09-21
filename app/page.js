@@ -130,6 +130,7 @@ export default function Home() {
   const [paymentBusy, setPaymentBusy] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('paystack')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [publicOrderLoading, setPublicOrderLoading] = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem('orderflow-state')
@@ -138,9 +139,36 @@ export default function Home() {
     }
     const rememberedEmail = localStorage.getItem('orderflow-remembered-email')
     if (rememberedEmail) setAuth(current => ({ ...current, email: rememberedEmail }))
-    const hasPaymentReturn = new URLSearchParams(window.location.search).has('reference')
-    const timer = hasPaymentReturn ? null : setTimeout(() => setScreen('welcome'), 1800)
+    const params = new URLSearchParams(window.location.search)
+    const hasPaymentReturn = params.has('reference')
+    const hasPublicOrder = params.has('order')
+    const timer = hasPaymentReturn || hasPublicOrder ? null : setTimeout(() => setScreen('welcome'), 1800)
     return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('order')
+    if (!token) return
+    if (!supabase) {
+      setScreen('public-error')
+      setNotice('This order link cannot be opened until Supabase is connected.')
+      return
+    }
+    setPublicOrderLoading(true)
+    setScreen('public-loading')
+    supabase.rpc('get_public_order', { p_token: token }).maybeSingle()
+      .then(({ data, error }) => {
+        if (error || !data) {
+          setNotice('This order link is invalid or no longer available.')
+          setScreen('public-error')
+          return
+        }
+        setSelected({ id: data.order_number, publicToken: token, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, unitPrice: Number(data.unit_price), deliveryFee: Number(data.delivery_fee), amount: Number(data.unit_price) * Number(data.quantity) + Number(data.delivery_fee), address: data.delivery_address, status: data.status, createdAt: data.created_at })
+        setDraft(current => ({ ...current, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, price: String(data.unit_price), delivery: String(data.delivery_fee), address: data.delivery_address || '' }))
+        setMerchant(current => ({ ...current, business: data.merchant_business || 'OrderFlow merchant' }))
+        setScreen('confirm')
+      })
+      .finally(() => setPublicOrderLoading(false))
   }, [])
 
   useEffect(() => {
@@ -186,6 +214,10 @@ export default function Home() {
         channel: order.channel,
         status: order.status,
         createdAt: order.created_at,
+        publicToken: order.public_token,
+        unitPrice: Number(order.unit_price),
+        deliveryFee: Number(order.delivery_fee),
+        address: order.delivery_address,
       })))
     }
     loadAccount()
@@ -259,9 +291,21 @@ export default function Home() {
         delivery_fee: Number(draft.delivery || 0),
       }).select().single()
       if (error) return setNotice(error.message)
-      setSelected({ id: data.order_number, databaseId: data.id, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, amount: total, channel: data.channel, status: data.status, createdAt: data.created_at || new Date().toISOString() })
+      const savedOrder = { id: data.order_number, databaseId: data.id, publicToken: data.public_token, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, unitPrice: Number(data.unit_price), deliveryFee: Number(data.delivery_fee), amount: total, channel: data.channel, status: data.status, createdAt: data.created_at || new Date().toISOString() }
+      setSelected(savedOrder)
+      setOrders(current => [savedOrder, ...current.filter(order => order.id !== savedOrder.id)])
     }
     go('link')
+  }
+
+  const confirmBuyerOrder = async () => {
+    if (supabase && selected?.publicToken) {
+      const { data, error } = await supabase.rpc('confirm_public_order', { p_token: selected.publicToken })
+      if (error) return setNotice('We could not confirm this order. Please try again.')
+      if (!data && selected.status !== 'Confirmed') return setNotice('This order can no longer be confirmed.')
+      setSelected(current => ({ ...current, status: 'Confirmed' }))
+    }
+    go('delivery')
   }
 
   const updateOrderStatus = async () => {
@@ -318,6 +362,10 @@ export default function Home() {
 
   if (screen === 'splash') return <main className="splash"><OrderFlowLogo /><p>Orders made simple.</p><div className="splash-pulse" /></main>
 
+  if (screen === 'public-loading') return <main className="splash"><OrderFlowLogo /><p>{publicOrderLoading ? 'Opening your secure order…' : 'Loading order…'}</p><div className="splash-pulse" /></main>
+
+  if (screen === 'public-error') return <AppShell onBack={go}><section className="success"><div className="order-link-error">!</div><h1>Order unavailable</h1><p>{notice || 'This order link is invalid or has expired.'}</p><button onClick={() => { window.history.replaceState({}, '', window.location.pathname); go('welcome') }}>Go to OrderFlow</button></section></AppShell>
+
 
   if (screen === 'welcome') return <AppShell onBack={go}><section className="welcome"><div className="welcome-brand"><OrderFlowLogo compact /></div><div className="welcome-art" aria-hidden="true"><span className="flow-card flow-card-one">New order</span><span className="flow-card flow-card-two">Payment secured</span><span className="flow-card flow-card-three">Ready to deliver</span><div className="flow-mark"><i /><i /><i /></div></div><h1>Turn every DM into a confirmed order.</h1><p>Create orders, receive secure payments and keep every customer updated in one place.</p><div className="channels"><span>● WhatsApp</span><span>● Instagram</span></div><button onClick={() => go('signup')}>Create a free account</button><button className="secondary" onClick={() => go('signin')}>Sign in</button><small className="welcome-trust">Built for independent sellers and growing businesses.</small></section></AppShell>
 
@@ -335,16 +383,16 @@ export default function Home() {
 
   if (screen === 'link') {
     const orderId = selected?.id || 'OF-1025'
-    const orderLink = `orderflow.ng/o/${orderId}`
+    const publicToken = selected?.publicToken || orderId
+    const orderLink = typeof window === 'undefined' ? '' : `${window.location.origin}/?order=${encodeURIComponent(publicToken)}`
     const shareOnWhatsApp = () => {
-      const liveLink = `${window.location.origin}/?order=${encodeURIComponent(orderId)}`
-      const message = `Hi ${draft.name || 'there'}, ${merchant.business} has created order ${orderId} for ${draft.item || 'your item'}. Total: ${naira.format(total || selected?.amount || 18500)}. Review your order here: ${liveLink}`
+      const message = `Hi ${draft.name || 'there'}, ${merchant.business} has created order ${orderId} for ${draft.item || 'your item'}. Total: ${naira.format(total || selected?.amount || 18500)}. Review your order here: ${orderLink}`
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
     }
-    return <AppShell onBack={go}><section className="success"><div className="check">✓</div><h1>Order link is ready!</h1><p>Send this secure link to {draft.name || 'your customer'} so they can review and confirm the order.</p><div className="copy">{orderLink} <button onClick={async () => { try { await navigator.clipboard.writeText(`${window.location.origin}/?order=${encodeURIComponent(orderId)}`); setNotice('Link copied') } catch { setNotice('Copy the link above') } }}>Copy</button></div>{notice && <div className="notice">{notice}</div>}<button className="whatsapp" onClick={shareOnWhatsApp}>Share on WhatsApp</button><button className="secondary">Share another way</button><button className="link" onClick={() => go('dashboard')}>Back to dashboard</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
+    return <AppShell onBack={go}><section className="success"><div className="check">✓</div><h1>Order link is ready!</h1><p>Send this secure link to {draft.name || 'your customer'} so they can review and confirm the order.</p><div className="copy"><span>{orderLink}</span><button onClick={async () => { try { await navigator.clipboard.writeText(orderLink); setNotice('Link copied') } catch { setNotice('Copy the link above') } }}>Copy</button></div>{notice && <div className="notice">{notice}</div>}<button className="whatsapp" onClick={shareOnWhatsApp}>Share on WhatsApp</button><button className="secondary" onClick={async () => { if (navigator.share) await navigator.share({ title: `Order ${orderId}`, text: `Review your order from ${merchant.business}`, url: orderLink }); else { await navigator.clipboard.writeText(orderLink); setNotice('Link copied—share it with your buyer.') } }}>Share another way</button><button className="link" onClick={() => go('dashboard')}>Back to dashboard</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
   }
 
-  if (screen === 'confirm') return <AppShell onBack={go}><section className="form"><div className="brand center">OrderFlow</div><h1>Hi {draft.name || 'Ada'}, check your order</h1><p>Confirm the details before making payment.</p><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>{draft.item || 'Leather handbag'} × {draft.qty}</span><b>{naira.format(Number(draft.price || 15000) * Number(draft.qty || 1))}</b></p><p><span>Delivery</span><b>{naira.format(Number(draft.delivery || 3500))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total || 18500)}</b></p></article><button onClick={() => go('delivery')}>Continue to delivery</button><button className="secondary" onClick={() => go('link')}>Request a correction</button></section></AppShell>
+  if (screen === 'confirm') return <AppShell onBack={go}><section className="form"><div className="brand center">OrderFlow</div><h1>Hi {draft.name || 'Ada'}, check your order</h1><p>Confirm the details before making payment.</p><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>Order number</span><b>{selected?.id || 'OF-1025'}</b></p><p><span>{draft.item || 'Leather handbag'} × {draft.qty}</span><b>{naira.format(Number(draft.price || 15000) * Number(draft.qty || 1))}</b></p><p><span>Delivery</span><b>{naira.format(Number(draft.delivery || 3500))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total || selected?.amount || 18500)}</b></p></article>{notice && <div className="notice">{notice}</div>}<button onClick={confirmBuyerOrder}>{selected?.status === 'Confirmed' ? 'Continue to delivery' : 'Confirm order details'}</button><button className="secondary" onClick={() => setNotice('Please contact the seller using the WhatsApp message you received and describe the correction needed.')}>Request a correction</button></section></AppShell>
 
   if (screen === 'delivery') return <AppShell onBack={go} back="confirm" title="Delivery details"><section className="form"><p>Where should the seller deliver your order?</p>{field('name','Full name')}{field('phone','Phone number','tel')}{field('email','Email address','email','you@example.com')}{field('address','Delivery address','text','Street, area and city')}<div className="total"><span>Order total</span><b>{naira.format(total || 18500)}</b></div><button disabled={!draft.name || !draft.email || !draft.address} onClick={() => go('payment')}>Continue to payment</button></section></AppShell>
 
