@@ -89,3 +89,84 @@ body{font-family:var(--font-geist-sans),Arial,sans-serif;letter-spacing:-.01em}
 /* Live order management */
 .section-link{width:auto;padding:7px 0;margin:0;background:transparent;color:var(--teal2);font-size:13px}.orders-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}.orders-summary span{display:flex;flex-direction:column;gap:3px;padding:12px 9px;border:1px solid var(--line);border-radius:13px;background:var(--soft);font-size:11px;color:var(--muted)}.orders-summary b{font-size:20px;color:var(--ink)}.filter-row{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}.filter-row::-webkit-scrollbar{display:none}.filter-row button{flex:0 0 auto;width:auto;margin:0;padding:9px 12px;border-radius:999px;background:var(--soft);border:1px solid var(--line);color:var(--muted);font-size:12px}.filter-row button.active{background:var(--navy);border-color:var(--navy);color:#fff}.order-list{padding-bottom:12px}.orders-create{margin-top:12px}.empty-state{padding:34px 18px;text-align:center;border:1px dashed var(--line);border-radius:16px;background:var(--soft)}.empty-state strong,.empty-state span{display:block}.empty-state span{margin-top:7px;color:var(--muted);font-size:13px}.danger-button{background:#fff4f2;color:#b42318;border:1px solid #f5c7c2;margin-top:12px}.payment-received{color:#176b67;background:#dff4f2}.out-for-delivery{color:#075985;background:#e0f2fe}.cancelled{color:#9f2d24;background:#fee8e5}
 [data-theme="dark"] .danger-button{background:#3c2528;color:#ffb4ad;border-color:#694047}[data-theme="dark"] .empty-state,[data-theme="dark"] .orders-summary span,[data-theme="dark"] .filter-row button{background:#12313c;border-color:var(--line)}[data-theme="dark"] .filter-row button.active{background:#167a9b;border-color:#167a9b;color:#fff}
+/* Live buyer tracking */
+.tracking-status {
+  padding: 20px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #e7f4fb, #e6f7f2);
+  border: 1px solid #d1e8ed;
+}
+
+.tracking-status small {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  color: var(--teal2);
+}
+
+.tracking-status h1 {
+  margin: 7px 0 5px;
+}
+
+.tracking-status p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.tracking-status.delivered {
+  background: linear-gradient(135deg, #e7f8ee, #effaf4);
+}
+
+.tracking-status.cancelled {
+  background: linear-gradient(135deg, #fff0ed, #fff7f4);
+}
+
+.tracking-updated {
+  font-size: 12px !important;
+  margin: 10px 3px 18px;
+  color: var(--muted);
+}
+
+.tracking-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tracking-heading h2 {
+  margin: 14px 0;
+}
+
+.tracking-heading button {
+  width: auto;
+  padding: 8px 10px;
+  margin: 0;
+  background: transparent;
+  color: var(--teal2);
+  font-size: 12px;
+}
+
+.tracking-cancelled {
+  background: #fff0ed;
+  color: #9f2d24;
+}
+
+.timeline .done:after {
+  background: var(--wa);
+}
+
+[data-theme="dark"] .tracking-status {
+  background: linear-gradient(135deg, #123845, #143d40);
+  border-color: var(--line);
+}
+
+[data-theme="dark"] .tracking-status.cancelled {
+  background: #3c2929;
+}
+
+[data-theme="dark"] .tracking-cancelled {
+  background: #3c2929;
+  color: #ffb4ad;
+}
