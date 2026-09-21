@@ -11,3 +11,34 @@
     min-height: 720px;
   }
 }
+
+.avatar-button {
+  width: 46px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0 24px;
+}
+
+.profile-head h1,
+.profile-head p {
+  margin: 0;
+}
+
+.profile-head p {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  font-size: 20px;
+  flex: 0 0 auto;
+}

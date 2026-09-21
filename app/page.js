@@ -26,22 +26,42 @@ const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN
 
 export default function Home() {
   const [screen, setScreen] = useState('splash')
-  const [merchant, setMerchant] = useState({ name: 'Ezekiel', business: 'Ezekiel Stores' })
+  const [merchant, setMerchant] = useState({ name: 'Ezekiel', business: 'Ezekiel Stores', phone: '', email: '' })
   const [orders, setOrders] = useState(seedOrders)
-  const [draft, setDraft] = useState({ name: '', phone: '', item: '', qty: 1, price: '', delivery: '', address: '' })
+  const [draft, setDraft] = useState({ name: '', phone: '', email: '', item: '', qty: 1, price: '', delivery: '', address: '' })
   const [selected, setSelected] = useState(seedOrders[0])
   const [notice, setNotice] = useState('')
   const [session, setSession] = useState(null)
   const [auth, setAuth] = useState({ name: '', email: '', password: '' })
   const [authBusy, setAuthBusy] = useState(false)
+  const [paymentBusy, setPaymentBusy] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState('paystack')
 
   useEffect(() => {
     const saved = localStorage.getItem('orderflow-state')
     if (saved) {
       try { const parsed = JSON.parse(saved); setOrders(parsed.orders || seedOrders); setMerchant(parsed.merchant || merchant) } catch {}
     }
-    const timer = setTimeout(() => setScreen('welcome'), 1800)
+    const hasPaymentReturn = new URLSearchParams(window.location.search).has('reference')
+    const timer = hasPaymentReturn ? null : setTimeout(() => setScreen('welcome'), 1800)
     return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const reference = new URLSearchParams(window.location.search).get('reference')
+    if (!reference) return
+    setPaymentBusy(true)
+    fetch(`/api/paystack/verify?reference=${encodeURIComponent(reference)}`)
+      .then(response => response.json())
+      .then(result => {
+        if (result.paid) setScreen('paid')
+        else { setScreen('payment'); setNotice(result.message || 'Payment could not be verified.') }
+      })
+      .catch(() => { setScreen('payment'); setNotice('Payment verification failed. Please try again.') })
+      .finally(() => {
+        setPaymentBusy(false)
+        window.history.replaceState({}, '', window.location.pathname)
+      })
   }, [])
 
   useEffect(() => {
@@ -58,7 +78,7 @@ export default function Home() {
         supabase.from('profiles').select('full_name,business_name').eq('id', session.user.id).maybeSingle(),
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
       ])
-      if (profile) setMerchant({ name: profile.full_name || 'Merchant', business: profile.business_name || 'My Store' })
+      if (profile) setMerchant(current => ({ ...current, name: profile.full_name || 'Merchant', business: profile.business_name || 'My Store', email: session.user.email || '' }))
       if (savedOrders?.length) setOrders(savedOrders.map(order => ({
         id: order.order_number,
         databaseId: order.id,
@@ -145,6 +165,43 @@ export default function Home() {
     setNotice('Order status updated')
   }
 
+  const saveProfile = async () => {
+    if (supabase && session) {
+      const { error } = await supabase.from('profiles').upsert({ id: session.user.id, full_name: merchant.name, business_name: merchant.business, phone: merchant.phone || '' })
+      if (error) return setNotice(error.message)
+    }
+    setNotice('Profile saved')
+  }
+
+  const signOut = async () => {
+    if (supabase) await supabase.auth.signOut()
+    setSession(null)
+    go('welcome')
+  }
+
+  const startPayment = async () => {
+    if (paymentMethod === 'opay') return setNotice('OPay setup requires approved merchant API credentials. Choose Paystack for the current test payment.')
+    setPaymentBusy(true)
+    setNotice('')
+    try {
+      const response = await fetch('/api/paystack/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: draft.email || auth.email || session?.user?.email || merchant.email,
+          amount: total || 18500,
+          orderId: selected?.id || 'OF-1025',
+        }),
+      })
+      const result = await response.json()
+      if (!response.ok || !result.authorizationUrl) throw new Error(result.message || 'Unable to start payment')
+      window.location.assign(result.authorizationUrl)
+    } catch (error) {
+      setNotice(error.message)
+      setPaymentBusy(false)
+    }
+  }
+
   if (screen === 'splash') return <main className="splash"><div className="mark">≡</div><h1>OrderFlow</h1><p>Orders made simple.</p></main>
 
 
@@ -156,7 +213,7 @@ export default function Home() {
 
   if (screen === 'setup') return <AppShell onBack={go} back="signup" title="Set up your business"><section className="form"><h1>Make OrderFlow yours</h1><label><span>Business name</span><input value={merchant.business} onChange={e => setMerchant({ ...merchant, business: e.target.value })} /></label><label><span>What do you sell?</span><select><option>Fashion and accessories</option><option>Beauty and personal care</option><option>Food and drinks</option><option>Services</option></select></label><label><span>WhatsApp business number</span><input placeholder="0801 234 5678" /></label>{notice && <div className="notice">{notice}</div>}<button onClick={completeSetup}>Complete setup</button></section></AppShell>
 
-  if (screen === 'dashboard') return <AppShell onBack={go}><section className="dashboard"><div className="dash-head"><div><div className="brand">OrderFlow</div><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div><span className="avatar">OE</span></div><button onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>4</b></div><div><span>Active</span><b>7</b></div><div><span>Issues</span><b>1</b></div></div><div className="section-title"><h2>Recent orders</h2><span>View all</span></div><div className="orders">{orders.map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.qty} item{order.qty > 1 ? 's' : ''} · {naira.format(order.amount)}</span><small>{order.channel} · Today</small></div><em className={order.status.toLowerCase()}>{order.status}</em></button>)}</div></section><nav><button>Home</button><button>Orders</button><button onClick={() => go('buyers')}>Buyers</button><button>Profile</button></nav></AppShell>
+  if (screen === 'dashboard') return <AppShell onBack={go}><section className="dashboard"><div className="dash-head"><div><div className="brand">OrderFlow</div><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div><button className="avatar avatar-button" onClick={() => go('profile')} aria-label="Open profile">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</button></div><button onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>4</b></div><div><span>Active</span><b>7</b></div><div><span>Issues</span><b>1</b></div></div><div className="section-title"><h2>Recent orders</h2><span>View all</span></div><div className="orders">{orders.map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.qty} item{order.qty > 1 ? 's' : ''} · {naira.format(order.amount)}</span><small>{order.channel} · Today</small></div><em className={order.status.toLowerCase()}>{order.status}</em></button>)}</div></section><nav><button>Home</button><button>Orders</button><button onClick={() => go('buyers')}>Buyers</button><button onClick={() => go('profile')}>Profile</button></nav></AppShell>
 
   if (screen === 'create') return <AppShell onBack={go} back="dashboard" title="Create order"><section className="form"><p className="step">Step 1 of 2 · Order details</p>{field('name','Customer name','text','Enter customer’s name')}{field('phone','Phone number','tel','0801 234 5678')}{field('item','Item or service','text','e.g. Leather handbag')}<div className="two">{field('qty','Quantity','number')}{field('price','Unit price','number','₦ 0.00')}</div>{field('delivery','Delivery fee','number','₦ 0.00')}<div className="total"><span>Order total</span><b>{naira.format(total)}</b></div><button disabled={!draft.name || !draft.item || !draft.price} onClick={() => go('review')}>Continue</button></section></AppShell>
 
@@ -170,15 +227,17 @@ export default function Home() {
 
   if (screen === 'confirm') return <AppShell onBack={go}><section className="form"><div className="brand center">OrderFlow</div><h1>Hi {draft.name || 'Ada'}, check your order</h1><p>Confirm the details before making payment.</p><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>{draft.item || 'Leather handbag'} × {draft.qty}</span><b>{naira.format(Number(draft.price || 15000) * Number(draft.qty || 1))}</b></p><p><span>Delivery</span><b>{naira.format(Number(draft.delivery || 3500))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total || 18500)}</b></p></article><button onClick={() => go('delivery')}>Continue to delivery</button><button className="secondary" onClick={() => go('link')}>Request a correction</button></section></AppShell>
 
-  if (screen === 'delivery') return <AppShell onBack={go} back="confirm" title="Delivery details"><section className="form"><p>Where should the seller deliver your order?</p>{field('name','Full name')}{field('phone','Phone number','tel')}{field('address','Delivery address','text','Street, area and city')}<div className="total"><span>Order total</span><b>{naira.format(total || 18500)}</b></div><button onClick={() => go('payment')}>Continue to payment</button></section></AppShell>
+  if (screen === 'delivery') return <AppShell onBack={go} back="confirm" title="Delivery details"><section className="form"><p>Where should the seller deliver your order?</p>{field('name','Full name')}{field('phone','Phone number','tel')}{field('email','Email address','email','you@example.com')}{field('address','Delivery address','text','Street, area and city')}<div className="total"><span>Order total</span><b>{naira.format(total || 18500)}</b></div><button disabled={!draft.name || !draft.email || !draft.address} onClick={() => go('payment')}>Continue to payment</button></section></AppShell>
 
-  if (screen === 'payment') return <AppShell onBack={go} title="Choose payment method"><section className="form"><p>Pay {naira.format(total || 18500)} securely for this order.</p>{['Bank transfer','Debit card','USSD','Pay on delivery'].map((item,i)=><label className="choice" key={item}><input type="radio" name="payment" defaultChecked={i===0}/><span><b>{item}</b><small>{i===0?'Get a dedicated account for this order':'Available in the live version'}</small></span></label>)}<button onClick={() => go('paid')}>Pay {naira.format(total || 18500)}</button><small className="center">Test payment only. No money will be charged.</small></section></AppShell>
+  if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form"><p>Pay {naira.format(total || 18500)} securely for this order.</p><label className="choice"><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => setPaymentMethod('paystack')}/><span><b>Paystack</b><small>Card, bank transfer and USSD · Test mode</small></span></label><label className="choice"><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : `Pay ${naira.format(total || 18500)}`}</button><small className="center">Paystack remains in test mode. No real money will be charged.</small></section></AppShell>
 
-  if (screen === 'paid') return <AppShell onBack={go}><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || 18500)}</b></p><p><span>Order ID</span><b>OF-1025</b></p><p><span>Method</span><b>Bank transfer</b></p></article><button onClick={() => go('tracking')}>Track my order</button><button className="secondary">Download receipt</button></section></AppShell>
+  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'OF-1025'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={() => go('tracking')}>Track my order</button><button className="secondary" onClick={() => go('dashboard')}>Back to dashboard</button></section></AppShell>
 
   if (screen === 'tracking') return <AppShell onBack={go} back="paid"><section className="form"><div className="brand center">OrderFlow</div><h1>Your order is on the way</h1><p>Last updated today, 2:30 PM</p><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>Total</span><b>{naira.format(total || 18500)}</b></p></article><h2>Order progress</h2><div className="timeline"><p className="done"><b>Order confirmed</b><span>You confirmed the details</span></p><p className="done"><b>Payment received</b><span>Seller confirmed your payment</span></p><p className="current"><b>Out for delivery</b><span>Your package is on the way</span></p><p><b>Delivered</b><span>Waiting for delivery confirmation</span></p></div><button className="secondary">Contact seller</button></section></AppShell>
 
   if (screen === 'buyers') return <AppShell onBack={go} back="dashboard"><section className="dashboard"><div className="brand">OrderFlow</div><h1>Buyers</h1><p>People who have ordered from your store.</p><input className="search" placeholder="Search name, phone or order ID" />{orders.map(order=><button className="buyer" key={order.id} onClick={()=>{setSelected(order);go('merchant-order')}}><span className="avatar">{order.name.split(' ').map(n=>n[0]).join('')}</span><span><b>{order.name}</b><small>{order.phone || '0801 234 5678'} · {order.channel}</small></span><em>View details</em></button>)}<button onClick={() => go('create')}>Create order for this buyer</button></section></AppShell>
+
+  if (screen === 'profile') return <AppShell onBack={go} back="dashboard" title="Profile"><section className="form"><div className="profile-head"><span className="avatar profile-avatar">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</span><div><h1>{merchant.name}</h1><p>{merchant.business}</p></div></div><label><span>Full name</span><input value={merchant.name} onChange={event => setMerchant({ ...merchant, name: event.target.value })}/></label><label><span>Business name</span><input value={merchant.business} onChange={event => setMerchant({ ...merchant, business: event.target.value })}/></label><label><span>Email address</span><input type="email" value={merchant.email || session?.user?.email || ''} onChange={event => setMerchant({ ...merchant, email: event.target.value })}/></label><label><span>Phone number</span><input type="tel" value={merchant.phone || ''} placeholder="0801 234 5678" onChange={event => setMerchant({ ...merchant, phone: event.target.value })}/></label>{notice && <div className="notice">{notice}</div>}<button onClick={saveProfile}>Save profile</button><button className="secondary" onClick={signOut}>Sign out</button></section></AppShell>
 
   if (screen === 'merchant-order') return <AppShell onBack={go} back="dashboard" title={`Order ${selected.id}`}><section className="form"><p className="step">Created today, 10:42 AM</p><article className="card"><small>CUSTOMER</small><h3>{selected.name}</h3><p>{selected.phone || '0801 234 5678'}</p></article><article className="card rows"><p><span>{selected.item} × {selected.qty}</span><b>{naira.format(selected.amount - 3500)}</b></p><p><span>Delivery</span><b>{naira.format(3500)}</b></p><p className="strong"><span>Total</span><b>{naira.format(selected.amount)}</b></p></article><label><span>Update progress</span><select value={selected.status} onChange={e=>setSelected({...selected,status:e.target.value})}><option>Pending</option><option>Confirmed</option><option>Payment received</option><option>Out for delivery</option><option>Delivered</option></select></label><button onClick={updateOrderStatus}>Update order status</button>{notice&&<div className="notice">{notice}</div>}</section></AppShell>
 
