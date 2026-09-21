@@ -57,6 +57,8 @@ export default function Home() {
   const [session, setSession] = useState(null)
   const [auth, setAuth] = useState({ name: '', email: '', password: '' })
   const [authBusy, setAuthBusy] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
   const [paymentBusy, setPaymentBusy] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('paystack')
 
@@ -65,6 +67,8 @@ export default function Home() {
     if (saved) {
       try { const parsed = JSON.parse(saved); setOrders(parsed.orders || seedOrders); setMerchant(parsed.merchant || merchant) } catch {}
     }
+    const rememberedEmail = localStorage.getItem('orderflow-remembered-email')
+    if (rememberedEmail) setAuth(current => ({ ...current, email: rememberedEmail }))
     const hasPaymentReturn = new URLSearchParams(window.location.search).has('reference')
     const timer = hasPaymentReturn ? null : setTimeout(() => setScreen('welcome'), 1800)
     return () => clearTimeout(timer)
@@ -143,6 +147,8 @@ export default function Home() {
     const { error } = await supabase.auth.signInWithPassword({ email: auth.email, password: auth.password })
     setAuthBusy(false)
     if (error) return setNotice(error.message)
+    if (rememberMe) localStorage.setItem('orderflow-remembered-email', auth.email)
+    else localStorage.removeItem('orderflow-remembered-email')
     go('dashboard')
   }
 
@@ -232,7 +238,7 @@ export default function Home() {
 
   if (screen === 'signup') return <AppShell onBack={go} back="welcome" title="Create your account"><section className="form"><h1>Let’s get you started</h1>{authField('name','Full name','text','Your full name')}{authField('email','Email address','email','you@business.com')}{authField('password','Password','password','At least 8 characters')}{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.name || !auth.email || auth.password.length < 8} onClick={signUp}>{authBusy ? 'Creating account…' : 'Continue'}</button><p className="center">Already have an account? <a onClick={() => go('signin')}>Sign in</a></p></section></AppShell>
 
-  if (screen === 'signin') return <AppShell onBack={go} back="welcome" title="Welcome back"><section className="form"><button className="social" onClick={signInWithGoogle}>Continue with Google</button><button className="social" disabled title="Apple Developer membership is required">Continue with Apple · Coming later</button><div className="or">or</div>{authField('email','Email address','email','you@business.com')}{authField('password','Password','password','Your password')}{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.email || !auth.password} onClick={signIn}>{authBusy ? 'Signing in…' : 'Sign in'}</button><p className="center">New to OrderFlow? <a onClick={() => go('signup')}>Create an account</a></p>{!isSupabaseConfigured && <small className="center">Demo mode is active until Supabase is connected.</small>}</section></AppShell>
+  if (screen === 'signin') return <AppShell onBack={go} back="welcome" title="Welcome back"><section className="form auth-form"><div className="auth-intro"><h1>Sign in to OrderFlow</h1><p>Manage orders, buyers and payments from one place.</p></div><button className="social" onClick={signInWithGoogle}>Continue with Google</button><button className="social" disabled title="Apple Developer membership is required">Continue with Apple · Coming later</button><div className="or"><span>or continue with email</span></div>{authField('email','Email address','email','you@business.com')}<label><span>Password</span><div className="password-field"><input type={showPassword ? 'text' : 'password'} value={auth.password} placeholder="Your password" onChange={event => setAuth({ ...auth, password: event.target.value })}/><button type="button" className="password-toggle" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button></div></label><div className="signin-options"><label className="remember"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)}/><span>Remember me</span></label><button type="button" className="text-button" onClick={() => setNotice('Password reset will be added next.')}>Forgot password?</button></div>{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.email || !auth.password} onClick={signIn}>{authBusy ? 'Signing in…' : 'Sign in'}</button><p className="center">New to OrderFlow? <a onClick={() => go('signup')}>Create an account</a></p>{!isSupabaseConfigured && <small className="center">Demo mode is active until Supabase is connected.</small>}</section></AppShell>
 
   if (screen === 'setup') return <AppShell onBack={go} back="signup" title="Set up your business"><section className="form"><h1>Make OrderFlow yours</h1><label><span>Business name</span><input value={merchant.business} onChange={e => setMerchant({ ...merchant, business: e.target.value })} /></label><label><span>What do you sell?</span><select><option>Fashion and accessories</option><option>Beauty and personal care</option><option>Food and drinks</option><option>Services</option></select></label><label><span>WhatsApp business number</span><input placeholder="0801 234 5678" /></label>{notice && <div className="notice">{notice}</div>}<button onClick={completeSetup}>Complete setup</button></section></AppShell>
 
