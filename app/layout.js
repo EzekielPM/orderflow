@@ -1,5 +1,6 @@
 import './globals.css'
 import './layout-fixes.css'
+import { GeistSans } from 'geist/font/sans'
 
 export const metadata = {
   title: 'OrderFlow',
@@ -8,5 +9,5 @@ export const metadata = {
 }
 
 export default function RootLayout({ children }) {
-  return <html lang="en"><body>{children}</body></html>
+  return <html lang="en" className={GeistSans.variable}><body className={GeistSans.className}>{children}</body></html>
 }
