@@ -31,3 +31,44 @@ html{background:#eef5f8}
 .choice input{accent-color:var(--teal2)}
 .choice em{margin-left:auto;font-size:10px;font-style:normal;color:var(--teal);background:#e5f5fa;padding:5px 7px;border-radius:20px}
 .payment-note{display:block;color:var(--muted);line-height:1.45;margin-top:8px}
+
+/* Production polish: spacing, themes, notifications and quiet screen graphics */
+body{font-family:var(--font-geist-sans),Arial,sans-serif;letter-spacing:-.01em}
+.topbar{height:72px;padding:10px 20px;border-bottom:1px solid transparent}
+.topbar>strong{font-weight:650;letter-spacing:-.025em}
+.form,.dashboard,.success{padding:34px 24px 28px}
+.theme-toggle{width:38px;height:38px;padding:0;margin:0 0 0 auto;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);font-size:18px;font-weight:600}
+.dash-head{align-items:center;margin-bottom:18px}
+.dash-head p{margin:18px 0 4px}.dash-head h1{margin-bottom:0}
+.header-actions{display:flex;align-items:center;gap:9px}
+.notification-button{position:relative;width:42px;height:42px;padding:10px;margin:0;background:var(--soft);color:var(--ink);border:1px solid var(--line)}
+.notification-button svg{width:21px;height:21px;display:block}
+.notification-button>span{position:absolute;right:8px;top:7px;width:8px;height:8px;border-radius:50%;background:#e45d6d;border:2px solid #fff}
+.notification-panel{position:absolute;z-index:40;top:116px;right:22px;width:min(330px,calc(100% - 44px));padding:16px;border:1px solid var(--line);border-radius:16px;background:#fff;box-shadow:0 18px 45px #102a4329}
+.notification-panel>div{display:flex;align-items:center;justify-content:space-between}.notification-panel>div button{width:30px;height:30px;padding:0;margin:0;background:var(--soft);color:var(--ink)}
+.notification-panel p{padding:12px 0;margin:0;border-bottom:1px solid var(--line)}.notification-panel p:last-child{border:0}.notification-panel b,.notification-panel span{display:block}.notification-panel span{font-size:13px;color:var(--muted);margin-top:4px}
+.screen-accent{height:76px;margin:4px 0 22px;border-radius:18px;position:relative;overflow:hidden;background:#edf7fa;border:1px solid #d9eaef}
+.screen-accent span{position:absolute;display:block;border-radius:12px;background:#fff;border:1px solid #d2e5ea;box-shadow:0 6px 14px #123a540d}
+.screen-accent span:nth-child(1){width:98px;height:28px;left:22px;top:14px}.screen-accent span:nth-child(2){width:78px;height:24px;left:44px;top:43px}.screen-accent span:nth-child(3){width:46px;height:46px;right:25px;top:15px;border-radius:50%;background:#d8f1ef;border-color:#c2e5e2}
+.screen-accent.buyers span:nth-child(1),.screen-accent.buyers span:nth-child(2){border-radius:50%;width:36px;height:36px}.screen-accent.buyers span:nth-child(1){left:28px;top:20px}.screen-accent.buyers span:nth-child(2){left:76px;top:20px}.screen-accent.buyers span:nth-child(3){width:108px;height:30px;right:22px;top:23px;border-radius:11px;background:#fff}
+.screen-accent.profile{height:68px}.screen-accent.profile span:nth-child(1){width:44px;height:44px;border-radius:50%;left:24px;top:11px;background:#d8f1ef}.screen-accent.profile span:nth-child(2){width:110px;height:12px;left:82px;top:17px}.screen-accent.profile span:nth-child(3){width:78px;height:10px;left:82px;top:37px;border-radius:8px;background:#fff}
+.order small,.buyer small,.step{font-variant-numeric:tabular-nums}
+.profile-form{padding-bottom:110px}.profile-actions{margin-top:46px;padding-top:22px;border-top:1px solid var(--line)}
+.profile-actions .secondary{margin-top:10px}
+
+[data-theme="dark"]{--ink:#edf7fb;--muted:#9db0bd;--line:#294754;--soft:#183743}
+[data-theme="dark"] html,[data-theme="dark"] body{background:#071c27;color:var(--ink)}
+[data-theme="dark"] .phone{background:linear-gradient(180deg,#0b2632 0,#0a202b 190px);box-shadow:0 0 40px #0008}
+[data-theme="dark"] .topbar,[data-theme="dark"] nav{background:#0b2530ee;border-color:var(--line)}
+[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] .card,[data-theme="dark"] .order,[data-theme="dark"] .buyer,[data-theme="dark"] .choice,[data-theme="dark"] .secondary,[data-theme="dark"] .social,[data-theme="dark"] .notification-panel{background:#102d39;color:var(--ink);border-color:var(--line)}
+[data-theme="dark"] .screen-accent{background:#123541;border-color:#294a55}
+[data-theme="dark"] .screen-accent span{background:#183f4c;border-color:#31545f}
+[data-theme="dark"] .screen-accent span:nth-child(3){background:#174b50}
+[data-theme="dark"] .stats div{background:#123c45}[data-theme="dark"] .stats div:nth-child(2){background:#242e50}[data-theme="dark"] .stats div:nth-child(3){background:#472f2d}
+[data-theme="dark"] .orderflow-logo strong,[data-theme="dark"] .brand{color:#e9f6fa}
+[data-theme="dark"] .notice{background:#173f35;color:#bdebd7}
+[data-theme="dark"] .total,[data-theme="dark"] .copy{background:#12313c;border-color:var(--line)}
+[data-theme="dark"] .rows p{border-color:var(--line)}
+[data-theme="dark"] .notification-button>span{border-color:#102d39}
+
+@media(max-width:480px){.form,.dashboard,.success{padding-top:28px}.screen-accent{height:66px;margin-bottom:18px}.profile-actions{margin-top:38px}}
