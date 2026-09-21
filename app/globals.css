@@ -84,3 +84,4 @@ body{font-family:var(--font-geist-sans),Arial,sans-serif;letter-spacing:-.01em}
 [data-theme="dark"] .notification-button>span{border-color:#102d39}
 
 @media(max-width:480px){.form,.dashboard,.success{padding-top:22px}.screen-accent{height:66px;margin-bottom:18px}.profile-actions{margin-top:38px}.merchant-topbar{padding-left:16px;padding-right:14px}.merchant-topbar .orderflow-logo{gap:7px}.merchant-topbar .orderflow-logo strong{font-size:18px}.topbar-actions{gap:5px}.topbar-actions .notification-button,.topbar-actions .avatar-button,.topbar-actions .theme-toggle{width:36px;height:36px;min-width:36px}.commerce-banner{height:122px}.commerce-copy{padding-left:16px}.commerce-copy strong{font-size:17px}}
+.copy span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.order-link-error{display:grid;place-items:center;margin:auto;width:84px;height:84px;border-radius:50%;background:#fff0e7;color:#b45309;font-size:42px;font-weight:800}
