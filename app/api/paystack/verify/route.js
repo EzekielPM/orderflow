@@ -12,13 +12,14 @@ export async function GET(request) {
   })
   const result = await response.json()
   const paid = response.ok && result.status && result.data?.status === 'success'
+  let paymentRecord = null
   if (paid) {
     try {
-      await recordSuccessfulPayment(result.data)
+      paymentRecord = await recordSuccessfulPayment(result.data)
     } catch (error) {
       console.error('Verified payment could not be recorded:', error)
       return NextResponse.json({ paid: false, message: 'Payment was verified but could not be recorded. Please contact the seller.' }, { status: 500 })
     }
   }
-  return NextResponse.json({ paid, message: paid ? 'Payment verified.' : result.message || 'Payment was not successful.' }, { status: paid ? 200 : 400 })
+  return NextResponse.json({ paid, message: paid ? 'Payment verified.' : result.message || 'Payment was not successful.', orderId: paymentRecord?.orderNumber, orderToken: paymentRecord?.publicToken, merchantId: paymentRecord?.merchantId }, { status: paid ? 200 : 400 })
 }
