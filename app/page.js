@@ -162,7 +162,9 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search)
     const hasPaymentReturn = params.has('reference')
     const hasPublicOrder = params.has('order') || params.has('track')
-    const timer = hasPaymentReturn || hasPublicOrder ? null : setTimeout(() => setScreen('welcome'), 1800)
+    const timer = hasPaymentReturn || hasPublicOrder
+      ? null
+      : setTimeout(() => setScreen(current => current === 'splash' ? 'welcome' : current), 1800)
     return () => clearTimeout(timer)
   }, [])
 
