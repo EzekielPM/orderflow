@@ -153,6 +153,7 @@ export default function Home() {
   const [rememberMe, setRememberMe] = useState(true)
   const [paymentBusy, setPaymentBusy] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('paystack')
+  const [paymentReference, setPaymentReference] = useState('')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [publicOrderLoading, setPublicOrderLoading] = useState(false)
   const [orderSearch, setOrderSearch] = useState('')
@@ -245,6 +246,7 @@ export default function Home() {
     const params = new URLSearchParams(window.location.search)
     const reference = params.get('reference')
     if (!reference) return
+    setPaymentReference(reference)
     const savedBuyerOrder = sessionStorage.getItem('orderflow-buyer-order')
     if (savedBuyerOrder) {
       try {
@@ -266,6 +268,7 @@ export default function Home() {
           return
         }
         if (result.merchantId) setStoreMerchantId(result.merchantId)
+        if (result.reference) setPaymentReference(result.reference)
         if (supabase && result.orderToken) {
           const [{ data: orderData }, { data: trackingData }] = await Promise.all([
             supabase.rpc('get_public_order', { p_token: result.orderToken }).maybeSingle(),
@@ -473,6 +476,18 @@ export default function Home() {
     if (!phone) return setNotice('The seller has not added a WhatsApp number yet.')
     const message = encodeURIComponent(`Hello, I am contacting you about OrderFlow order ${selected?.id || ''}.`)
     window.open(`https://wa.me/${phone}?text=${message}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const shareTrackingLink = async () => {
+    if (!selected?.publicToken) return setNotice('A secure tracking link is not available for this order.')
+    const url = `${window.location.origin}/?track=${encodeURIComponent(selected.publicToken)}`
+    const shareData = { title: `Track order ${selected.id}`, text: `Track order ${selected.id} from ${merchant.business}`, url }
+    try {
+      if (navigator.share) await navigator.share(shareData)
+      else { await navigator.clipboard.writeText(url); setNotice('Tracking link copied') }
+    } catch (error) {
+      if (error?.name !== 'AbortError') setNotice('The tracking link could not be shared. Please try again.')
+    }
   }
 
   const openOrderEditor = () => {
@@ -735,7 +750,7 @@ export default function Home() {
 
   if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form payment-form"><div className="payment-summary"><span>Amount to pay</span><strong>{naira.format(total || 18500)}</strong><small>Protected checkout · Test mode</small></div><label className={`choice ${paymentMethod === 'paystack' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => { setPaymentMethod('paystack'); setNotice('') }}/><span><b>Paystack checkout</b><small>Card, USSD and mobile money</small></span><em>Recommended</em></label><label className={`choice ${paymentMethod === 'bank-transfer' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'bank-transfer'} onChange={() => { setPaymentMethod('bank-transfer'); setNotice('') }}/><span><b>Bank transfer</b><small>Pay securely by transfer through Paystack</small></span></label><label className={`choice ${paymentMethod === 'escrow' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'escrow'} onChange={() => setPaymentMethod('escrow')}/><span><b>Protected payment (Escrow)</b><small>Funds released after delivery · Coming soon</small></span></label><label className={`choice ${paymentMethod === 'opay' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required · Coming soon</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : paymentMethod === 'escrow' || paymentMethod === 'opay' ? 'Check availability' : `Pay ${naira.format(total || 18500)}`}</button><small className="center payment-note">Paystack is currently in test mode. No real money will be charged.</small></section></AppShell>
 
-  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={openTracking}>Track my order</button>{storeMerchantId && <button className="secondary" onClick={openStorefront}>Continue shopping</button>}<button className="link" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
+  if (screen === 'paid') { const paidSubtotal = Number(selected?.unitPrice || draft.price || 0) * Number(selected?.qty || draft.qty || 1); const paidDelivery = Number(selected?.deliveryFee ?? draft.delivery ?? 0); const paidTotal = Number(selected?.amount || paidSubtotal + paidDelivery); return <AppShell onBack={go}><section className="success payment-success"><div className="success-mark"><span>✓</span></div><small className="success-label">Payment confirmed</small><h1>Thank you, {draft.name?.split(' ')[0] || 'your order is paid'}!</h1><p>{merchant.business} has received your payment and can now prepare your order.</p><article className="success-order-card"><div className="success-order-head"><span><small>Order number</small><b>{selected?.id || 'Order'}</b></span><em>Paid</em></div><div className="paid-items">{cart.length > 0 ? cart.map(entry => <div className="paid-item" key={entry.product.id}><div className="paid-item-image" style={{ backgroundImage: `url(${entry.product.image_url || seedProducts[0].image_url})` }}/><span><b>{entry.product.name}</b><small>{entry.quantity} × {naira.format(entry.product.price)}</small></span><strong>{naira.format(Number(entry.product.price) * entry.quantity)}</strong></div>) : <div className="paid-item fallback"><span><b>{selected?.item || draft.item || 'Your order'}</b><small>Purchased item</small></span><strong>{naira.format(paidSubtotal)}</strong></div>}</div><div className="paid-totals"><p><span>Subtotal</span><b>{naira.format(paidSubtotal)}</b></p><p><span>Delivery</span><b>{paidDelivery > 0 ? naira.format(paidDelivery) : 'Free'}</b></p><p className="paid-total"><span>Total paid</span><b>{naira.format(paidTotal)}</b></p></div>{paymentReference && <div className="payment-reference"><span>Payment reference</span><code>{paymentReference}</code></div>}</article><button className="track-order-primary" onClick={openTracking}>Track my order</button><div className="success-actions"><button className="secondary" onClick={shareTrackingLink}>Share tracking link</button><button className="secondary" onClick={contactSeller}>Contact seller</button></div>{storeMerchantId && <button className="link continue-shopping" onClick={openStorefront}>Continue shopping at {merchant.business}</button>}{notice && <div className="notice">{notice}</div>}<div className="success-assurance"><span>✓ Payment verified</span><span>✓ Order tracking active</span></div></section></AppShell> }
 
   if (screen === 'tracking') {
     const status = selected?.status || 'Pending'
