@@ -21,5 +21,5 @@ export async function GET(request) {
       return NextResponse.json({ paid: false, message: 'Payment was verified but could not be recorded. Please contact the seller.' }, { status: 500 })
     }
   }
-  return NextResponse.json({ paid, message: paid ? 'Payment verified.' : result.message || 'Payment was not successful.', orderId: paymentRecord?.orderNumber, orderToken: paymentRecord?.publicToken, merchantId: paymentRecord?.merchantId }, { status: paid ? 200 : 400 })
+  return NextResponse.json({ paid, message: paid ? 'Payment verified.' : result.message || 'Payment was not successful.', orderId: paymentRecord?.orderNumber, orderToken: paymentRecord?.publicToken, merchantId: paymentRecord?.merchantId, reference: paymentRecord?.reference }, { status: paid ? 200 : 400 })
 }
