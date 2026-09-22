@@ -236,11 +236,18 @@ export default function Home() {
   useEffect(() => {
     if (!supabase || !session) return
     const loadAccount = async () => {
+      const params = new URLSearchParams(window.location.search)
+      const isPublicFlow = params.has('order') || params.has('track') || params.has('reference')
       const [{ data: profile }, { data: savedOrders }] = await Promise.all([
         supabase.from('profiles').select('full_name,business_name,phone').eq('id', session.user.id).maybeSingle(),
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
       ])
-      if (profile) setMerchant(current => ({ ...current, name: profile.full_name || 'Merchant', business: profile.business_name || 'My Store', phone: profile.phone || '', email: session.user.email || '' }))
+      const googleName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || ''
+      if (profile) {
+        setMerchant(current => ({ ...current, name: profile.full_name || googleName || 'Merchant', business: profile.business_name || 'My Store', phone: profile.phone || '', email: session.user.email || '' }))
+      } else {
+        setMerchant(current => ({ ...current, name: googleName || 'Merchant', email: session.user.email || '' }))
+      }
       if (savedOrders) setOrders(savedOrders.map(order => ({
         id: order.order_number,
         databaseId: order.id,
@@ -257,6 +264,7 @@ export default function Home() {
         deliveryFee: Number(order.delivery_fee),
         address: order.delivery_address,
       })))
+      if (!isPublicFlow) setScreen(profile?.business_name ? 'dashboard' : 'setup')
     }
     loadAccount()
   }, [session])
