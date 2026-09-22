@@ -254,9 +254,26 @@ export default function Home() {
     setPaymentBusy(true)
     fetch(`/api/paystack/verify?reference=${encodeURIComponent(reference)}`)
       .then(response => response.json())
-      .then(result => {
-        if (result.paid) setScreen('paid')
-        else { setScreen('payment'); setNotice(result.message || 'Payment could not be verified.') }
+      .then(async result => {
+        if (!result.paid) {
+          setScreen('payment')
+          setNotice(result.message || 'Payment could not be verified.')
+          return
+        }
+        if (result.merchantId) setStoreMerchantId(result.merchantId)
+        if (supabase && result.orderToken) {
+          const [{ data: orderData }, { data: trackingData }] = await Promise.all([
+            supabase.rpc('get_public_order', { p_token: result.orderToken }).maybeSingle(),
+            supabase.rpc('get_public_order_tracking', { p_token: result.orderToken }).maybeSingle(),
+          ])
+          if (orderData) {
+            const paidOrder = { id: orderData.order_number, publicToken: result.orderToken, name: orderData.customer_name, phone: orderData.customer_phone, item: orderData.item_name, qty: orderData.quantity, unitPrice: Number(orderData.unit_price), deliveryFee: Number(orderData.delivery_fee), amount: Number(orderData.unit_price) * Number(orderData.quantity) + Number(orderData.delivery_fee), address: orderData.delivery_address, status: trackingData?.status || 'Payment received', createdAt: orderData.created_at, updatedAt: trackingData?.updated_at, paymentStatus: trackingData?.payment_status || 'paid' }
+            setSelected(paidOrder)
+            setDraft(current => ({ ...current, name: orderData.customer_name, phone: orderData.customer_phone, item: orderData.item_name, qty: orderData.quantity, price: String(orderData.unit_price), delivery: String(orderData.delivery_fee), address: orderData.delivery_address || '' }))
+            setMerchant(current => ({ ...current, business: orderData.merchant_business || current.business, phone: trackingData?.merchant_phone || current.phone }))
+          }
+        }
+        setScreen('paid')
       })
       .catch(() => { setScreen('payment'); setNotice('Payment verification failed. Please try again.') })
       .finally(() => {
@@ -562,6 +579,20 @@ export default function Home() {
     setNotice('Store link copied')
   }
 
+  const openStorefront = async () => {
+    if (!supabase || !storeMerchantId) return go('welcome')
+    setScreen('public-loading')
+    const { data, error } = await supabase.rpc('get_public_store', { p_merchant: storeMerchantId }).maybeSingle()
+    if (error || !data) {
+      setNotice('The seller storefront could not be opened.')
+      return setScreen('public-error')
+    }
+    setMerchant(current => ({ ...current, business: data.business_name || current.business, phone: data.phone || current.phone }))
+    setProducts(Array.isArray(data.products) ? data.products : [])
+    setCart([])
+    go('store')
+  }
+
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
@@ -648,7 +679,7 @@ export default function Home() {
 
   if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form payment-form"><div className="payment-summary"><span>Amount to pay</span><strong>{naira.format(total || 18500)}</strong><small>Protected checkout · Test mode</small></div><label className={`choice ${paymentMethod === 'paystack' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => { setPaymentMethod('paystack'); setNotice('') }}/><span><b>Paystack checkout</b><small>Card, USSD and mobile money</small></span><em>Recommended</em></label><label className={`choice ${paymentMethod === 'bank-transfer' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'bank-transfer'} onChange={() => { setPaymentMethod('bank-transfer'); setNotice('') }}/><span><b>Bank transfer</b><small>Pay securely by transfer through Paystack</small></span></label><label className={`choice ${paymentMethod === 'escrow' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'escrow'} onChange={() => setPaymentMethod('escrow')}/><span><b>Protected payment (Escrow)</b><small>Funds released after delivery · Coming soon</small></span></label><label className={`choice ${paymentMethod === 'opay' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required · Coming soon</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : paymentMethod === 'escrow' || paymentMethod === 'opay' ? 'Check availability' : `Pay ${naira.format(total || 18500)}`}</button><small className="center payment-note">Paystack is currently in test mode. No real money will be charged.</small></section></AppShell>
 
-  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={openTracking}>Track my order</button>{storeMerchantId && <button className="secondary" onClick={() => go('store')}>Continue shopping</button>}<button className="link" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
+  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={openTracking}>Track my order</button>{storeMerchantId && <button className="secondary" onClick={openStorefront}>Continue shopping</button>}<button className="link" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
 
   if (screen === 'tracking') {
     const status = selected?.status || 'Pending'
