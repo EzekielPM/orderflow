@@ -413,7 +413,8 @@ button, b, strong { font-weight: 600; }
 .store-product-card > div:last-child > span small { display: block; margin-top: 3px; color: #a36b17; }
 .store-product-card > div:last-child button { width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%; font-size: 22px; }
 .seller-help { display: block; margin: 22px 0 8px; padding: 14px; color: var(--accent); background: var(--soft); border: 1px solid var(--line); border-radius: 14px; text-align: center; text-decoration: none; font-weight: 600; }
-.floating-cart { position: sticky; bottom: 12px; display: flex; justify-content: space-between; align-items: center; margin-top: 18px; box-shadow: 0 10px 24px rgba(7,59,92,.2); }
+.floating-cart { position: fixed; z-index: 40; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); width: min(calc(100% - 40px), 390px); display: flex; justify-content: space-between; align-items: center; margin: 0; transform: translateX(-50%); box-shadow: 0 14px 32px rgba(7,59,92,.28); }
+.storefront:has(.floating-cart) { padding-bottom: 100px; }
 .product-detail { width: min(100%, 720px); margin: 0 auto; padding: 22px 24px 38px; }
 .detail-image { position: relative; min-height: 360px; border-radius: 22px; background: var(--soft) center / cover no-repeat; }
 .image-thumbnails { display: flex; gap: 10px; margin: 12px 0 20px; overflow-x: auto; }
@@ -447,12 +448,14 @@ button, b, strong { font-weight: 600; }
   .merchant-product-grid, .store-product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .storefront { width: min(100%, 980px) !important; margin-inline: auto; padding: 30px 34px 40px; }
   .product-image { min-height: 190px; }
+  .floating-cart { width: min(calc(100% - 96px), 700px); bottom: 28px; }
 }
 
 @media (min-width: 1100px) {
   .merchant-product-grid, .store-product-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .products-screen { padding-bottom: 50px; }
   .storefront { width: min(100%, 1120px) !important; }
+  .floating-cart { width: min(calc(100% - 120px), 760px); bottom: 30px; }
 }
 
 @media (max-width: 480px) {
