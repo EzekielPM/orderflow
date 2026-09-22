@@ -10,8 +10,8 @@ const seedOrders = [
 ]
 
 const seedProducts = [
-  { id: 'sample-1', name: 'Classic handbag', description: 'A polished everyday carry.', price: 28000, category: 'Fashion', image_url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80', active: true },
-  { id: 'sample-2', name: 'Glow skincare set', description: 'A simple daily care bundle.', price: 24500, category: 'Beauty', image_url: 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&w=700&q=80', active: true },
+  { id: 'sample-1', name: 'Classic handbag', description: 'A polished everyday carry.', price: 28000, category: 'Fashion', image_url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80', stock_quantity: 8, active: true },
+  { id: 'sample-2', name: 'Glow skincare set', description: 'A simple daily care bundle.', price: 24500, category: 'Beauty', image_url: 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&w=700&q=80', stock_quantity: 12, active: true },
 ]
 
 function AppShell({ children, back, title, onBack, merchantHeader = false, merchantName = '', onNotifications, onProfile }) {
@@ -159,7 +159,9 @@ export default function Home() {
   const [orderFilter, setOrderFilter] = useState('All')
   const [editingOrder, setEditingOrder] = useState(null)
   const [products, setProducts] = useState(seedProducts)
-  const [productDraft, setProductDraft] = useState({ name: '', description: '', price: '', category: 'Fashion', image: null })
+  const emptyProductDraft = { name: '', description: '', price: '', category: 'Fashion', stock_quantity: '1', images: [], existingImages: [] }
+  const [productDraft, setProductDraft] = useState(emptyProductDraft)
+  const [editingProduct, setEditingProduct] = useState(null)
   const [productBusy, setProductBusy] = useState(false)
   const [cart, setCart] = useState([])
   const [storeSearch, setStoreSearch] = useState('')
@@ -516,26 +518,54 @@ export default function Home() {
 
   const saveProduct = async () => {
     if (!productDraft.name.trim() || Number(productDraft.price) <= 0) return setNotice('Add a product name and valid price.')
+    if (!Number.isInteger(Number(productDraft.stock_quantity)) || Number(productDraft.stock_quantity) < 0) return setNotice('Stock must be zero or a whole number.')
     setProductBusy(true)
     setNotice('')
     try {
-      let imageUrl = ''
-      if (supabase && session && productDraft.image) {
-        const extension = productDraft.image.name.split('.').pop() || 'jpg'
-        const path = `${session.user.id}/${crypto.randomUUID()}.${extension}`
-        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, productDraft.image, { upsert: false })
-        if (uploadError) throw uploadError
-        imageUrl = supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl
+      const uploadedImages = []
+      if (supabase && session && productDraft.images.length) {
+        for (const image of productDraft.images) {
+          const extension = image.name.split('.').pop() || 'jpg'
+          const path = `${session.user.id}/${crypto.randomUUID()}.${extension}`
+          const { error: uploadError } = await supabase.storage.from('product-images').upload(path, image, { upsert: false })
+          if (uploadError) throw uploadError
+          uploadedImages.push(supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl)
+        }
       }
-      const product = { merchant_id: session?.user?.id, name: productDraft.name.trim(), description: productDraft.description.trim(), price: Number(productDraft.price), category: productDraft.category, image_url: imageUrl, active: true }
+      const imageUrls = [...productDraft.existingImages, ...uploadedImages].slice(0, 4)
+      const product = { merchant_id: session?.user?.id, name: productDraft.name.trim(), description: productDraft.description.trim(), price: Number(productDraft.price), category: productDraft.category, stock_quantity: Number(productDraft.stock_quantity), image_url: imageUrls[0] || '', images: imageUrls, active: editingProduct?.active ?? true, updated_at: new Date().toISOString() }
       if (supabase && session) {
-        const { data, error } = await supabase.from('products').insert(product).select().single()
+        const query = editingProduct
+          ? supabase.from('products').update(product).eq('id', editingProduct.id)
+          : supabase.from('products').insert(product)
+        const { data, error } = await query.select().single()
         if (error) throw error
-        setProducts(current => [data, ...current])
-      } else setProducts(current => [{ ...product, id: crypto.randomUUID(), image_url: imageUrl || seedProducts[0].image_url }, ...current])
-      setProductDraft({ name: '', description: '', price: '', category: 'Fashion', image: null })
+        setProducts(current => editingProduct ? current.map(item => item.id === data.id ? data : item) : [data, ...current])
+      } else {
+        const localProduct = { ...product, id: editingProduct?.id || crypto.randomUUID(), image_url: imageUrls[0] || seedProducts[0].image_url }
+        setProducts(current => editingProduct ? current.map(item => item.id === localProduct.id ? localProduct : item) : [localProduct, ...current])
+      }
+      setProductDraft(emptyProductDraft)
+      setEditingProduct(null)
       go('products')
     } catch (error) { setNotice(error.message) } finally { setProductBusy(false) }
+  }
+
+  const editProduct = (product) => {
+    setEditingProduct(product)
+    setProductDraft({ name: product.name, description: product.description || '', price: String(product.price), category: product.category || 'Other', stock_quantity: String(product.stock_quantity ?? 0), images: [], existingImages: product.images?.length ? product.images : (product.image_url ? [product.image_url] : []) })
+    setNotice('')
+    go('add-product')
+  }
+
+  const deleteProduct = async (product) => {
+    if (!window.confirm(`Delete ${product.name}? This cannot be undone.`)) return
+    if (supabase && session && !String(product.id).startsWith('sample-')) {
+      const { error } = await supabase.from('products').delete().eq('id', product.id)
+      if (error) return setNotice(error.message)
+    }
+    setProducts(current => current.filter(item => item.id !== product.id))
+    setNotice('Product deleted')
   }
 
   const toggleProduct = async (product) => {
@@ -550,11 +580,20 @@ export default function Home() {
   const addToCart = (product) => {
     setCart(current => {
       const found = current.find(entry => entry.product.id === product.id)
+      const stock = Number(product.stock_quantity ?? 999999)
+      if (stock <= 0 || (found && found.quantity >= stock)) {
+        setNotice(stock <= 0 ? 'This product is out of stock.' : `Only ${stock} available.`)
+        return current
+      }
       return found ? current.map(entry => entry.product.id === product.id ? { ...entry, quantity: entry.quantity + 1 } : entry) : [...current, { product, quantity: 1 }]
     })
   }
 
-  const changeCartQuantity = (productId, change) => setCart(current => current.map(entry => entry.product.id === productId ? { ...entry, quantity: Math.max(0, entry.quantity + change) } : entry).filter(entry => entry.quantity > 0))
+  const changeCartQuantity = (productId, change) => setCart(current => current.map(entry => {
+    if (entry.product.id !== productId) return entry
+    const stock = Number(entry.product.stock_quantity ?? 999999)
+    return { ...entry, quantity: Math.min(stock, Math.max(0, entry.quantity + change)) }
+  }).filter(entry => entry.quantity > 0))
 
   const createCartOrder = async () => {
     if (!draft.name || !draft.email || !draft.address || cart.length === 0) return setNotice('Add your name, email and delivery address.')
@@ -646,11 +685,11 @@ export default function Home() {
 
   if (screen === 'dashboard') return <AppShell onBack={go} merchantHeader merchantName={merchant.name} onNotifications={() => setNotificationsOpen(value => !value)} onProfile={() => go('profile')}><section className="dashboard"><div className="dash-head"><div><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div></div>{notificationsOpen && <aside className="notification-panel"><div><strong>Notifications</strong><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications">×</button></div><p><b>Payment received</b><span>An order payment has been confirmed.</span></p><p><b>Order update</b><span>Review your awaiting orders.</span></p></aside>}<CommerceBanner /><button className="create-order-button" onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>{orderStats.awaiting}</b></div><div><span>Active</span><b>{orderStats.active}</b></div><div><span>Issues</span><b>{orderStats.issues}</b></div></div><div className="dashboard-workspace"><div className="recent-orders-panel"><div className="section-title"><h2>Recent orders</h2><button className="section-link" onClick={() => go('orders')}>View all</button></div><div className="orders">{orders.slice(0,5).map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.qty} item{order.qty > 1 ? 's' : ''} · {naira.format(order.amount)}</span><small>{order.channel} · {orderDate.format(new Date(order.createdAt || Date.now()))}</small></div><em className={order.status.toLowerCase().replaceAll(' ','-')}>{order.status}</em></button>)}{orders.length === 0 && <div className="empty-state"><strong>No orders yet</strong><span>Create your first order to see it here.</span></div>}</div></div><aside className="dashboard-support"><div className="section-title"><h2>Quick actions</h2></div><button className="quick-action" onClick={() => go('create')}><NavIcon type="orders"/><span><b>Create new order</b><small>Prepare a secure buyer link</small></span></button><button className="quick-action" onClick={() => go('buyers')}><NavIcon type="buyers"/><span><b>View buyers</b><small>Open your customer directory</small></span></button><button className="quick-action" onClick={() => go('profile')}><NavIcon type="profile"/><span><b>Business profile</b><small>Review your store details</small></span></button><div className="activity-note"><span>Today</span><strong>{orderStats.active} active order{orderStats.active === 1 ? '' : 's'}</strong><small>Keep buyers informed as orders progress.</small></div></aside></div></section><MerchantNav active="dashboard" onNavigate={go}/></AppShell>
 
-  if (screen === 'products') return <AppShell onBack={go} back="dashboard" title="Products"><section className="dashboard products-screen"><div className="catalogue-head"><div><h1>Your catalogue</h1><p>Products buyers can browse and add to their cart.</p></div><button onClick={() => go('add-product')}>+ Add product</button></div><div className="store-share-card"><span><b>Your public store</b><small>Share one link for buyers to browse and checkout.</small></span><button className="secondary" onClick={shareStore}>Copy or share link</button></div>{notice && <div className="notice">{notice}</div>}<div className="merchant-product-grid">{products.map(product => <article className={`merchant-product-card${product.active === false ? ' unavailable' : ''}`} key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}/><div><small>{product.category}</small><h3>{product.name}</h3><strong>{naira.format(product.price)}</strong><button className="secondary" onClick={() => toggleProduct(product)}>{product.active === false ? 'Make available' : 'Mark unavailable'}</button></div></article>)}</div></section><MerchantNav active="products" onNavigate={go}/></AppShell>
+  if (screen === 'products') return <AppShell onBack={go} back="dashboard" title="Products"><section className="dashboard products-screen"><div className="catalogue-head"><div><h1>Your catalogue</h1><p>Manage what buyers see, pricing and available stock.</p></div><button onClick={() => { setEditingProduct(null); setProductDraft(emptyProductDraft); go('add-product') }}>+ Add product</button></div><div className="store-share-card"><span><b>Your public store</b><small>Share one link for buyers to browse and checkout.</small></span><button className="secondary" onClick={shareStore}>Copy or share link</button></div>{notice && <div className="notice">{notice}</div>}<div className="merchant-product-grid">{products.map(product => <article className={`merchant-product-card${product.active === false ? ' unavailable' : ''}`} key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}>{Number(product.stock_quantity ?? 1) === 0 && <span className="stock-badge sold-out">Out of stock</span>}{product.active === false && <span className="stock-badge hidden">Hidden</span>}</div><div><small>{product.category}</small><h3>{product.name}</h3><strong>{naira.format(product.price)}</strong><span className="stock-line">{Number(product.stock_quantity ?? 0)} in stock</span><div className="product-actions"><button className="secondary" onClick={() => editProduct(product)}>Edit</button><button className="secondary" onClick={() => toggleProduct(product)}>{product.active === false ? 'Show' : 'Hide'}</button><button className="danger-link" onClick={() => deleteProduct(product)}>Delete</button></div></div></article>)}</div></section><MerchantNav active="products" onNavigate={go}/></AppShell>
 
-  if (screen === 'add-product') return <AppShell onBack={go} back="products" title="Add product"><section className="form product-form"><h1>Add to your catalogue</h1><p>Use a clear photo and a simple description buyers can understand quickly.</p><label><span>Product image</span><input type="file" accept="image/*" onChange={event => setProductDraft({ ...productDraft, image: event.target.files?.[0] || null })}/></label><label><span>Product name</span><input value={productDraft.name} placeholder="e.g. Classic handbag" onChange={event => setProductDraft({ ...productDraft, name: event.target.value })}/></label><label><span>Short description</span><input value={productDraft.description} placeholder="What should the buyer know?" onChange={event => setProductDraft({ ...productDraft, description: event.target.value })}/></label><div className="two"><label><span>Price</span><input type="number" min="0" value={productDraft.price} placeholder="₦ 0" onChange={event => setProductDraft({ ...productDraft, price: event.target.value })}/></label><label><span>Category</span><select value={productDraft.category} onChange={event => setProductDraft({ ...productDraft, category: event.target.value })}><option>Fashion</option><option>Beauty</option><option>Food</option><option>Electronics</option><option>Home</option><option>Other</option></select></label></div>{notice && <div className="notice">{notice}</div>}<button disabled={productBusy} onClick={saveProduct}>{productBusy ? 'Saving product…' : 'Add product'}</button></section><MerchantNav active="products" onNavigate={go}/></AppShell>
+  if (screen === 'add-product') return <AppShell onBack={go} back="products" title={editingProduct ? 'Edit product' : 'Add product'}><section className="form product-form"><h1>{editingProduct ? 'Update product' : 'Add to your catalogue'}</h1><p>Use clear details and up to four photos buyers can trust.</p><label><span>Product photos</span><input type="file" accept="image/*" multiple onChange={event => setProductDraft({ ...productDraft, images: Array.from(event.target.files || []).slice(0, 4) })}/><small>{productDraft.existingImages.length ? `${productDraft.existingImages.length} saved photo${productDraft.existingImages.length > 1 ? 's' : ''}. New photos will be added.` : 'Choose up to four images.'}</small></label><label><span>Product name</span><input value={productDraft.name} placeholder="e.g. Classic handbag" onChange={event => setProductDraft({ ...productDraft, name: event.target.value })}/></label><label><span>Short description</span><input value={productDraft.description} placeholder="What should the buyer know?" onChange={event => setProductDraft({ ...productDraft, description: event.target.value })}/></label><div className="two"><label><span>Price</span><input type="number" min="0" value={productDraft.price} placeholder="₦ 0" onChange={event => setProductDraft({ ...productDraft, price: event.target.value })}/></label><label><span>Stock quantity</span><input type="number" min="0" step="1" value={productDraft.stock_quantity} placeholder="0" onChange={event => setProductDraft({ ...productDraft, stock_quantity: event.target.value })}/></label></div><label><span>Category</span><select value={productDraft.category} onChange={event => setProductDraft({ ...productDraft, category: event.target.value })}><option>Fashion</option><option>Beauty</option><option>Food & drinks</option><option>Electronics</option><option>Home & living</option><option>Health</option><option>Services</option><option>Other</option></select></label>{notice && <div className="notice">{notice}</div>}<button disabled={productBusy} onClick={saveProduct}>{productBusy ? 'Saving product…' : editingProduct ? 'Save changes' : 'Add product'}</button></section><MerchantNav active="products" onNavigate={go}/></AppShell>
 
-  if (screen === 'store') return <AppShell onBack={go}><section className="storefront"><div className="store-identity"><div className="avatar">{merchant.business.slice(0,2).toUpperCase()}</div><div><h1>{merchant.business}</h1><p>Shop securely and track every order.</p></div><button className="cart-button" onClick={() => go('cart')} aria-label="Open cart"><NavIcon type="products"/><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)}</span></button></div><input className="search" type="search" value={storeSearch} onChange={event => setStoreSearch(event.target.value)} placeholder="Search products"/><div className="store-trust"><span>✓ Secure payments</span><span>✓ Order tracking</span></div><div className="store-product-grid">{visibleProducts.map(product => <article className="store-product-card" key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}/><small>{product.category}</small><h3>{product.name}</h3><p>{product.description}</p><div><strong>{naira.format(product.price)}</strong><button onClick={() => addToCart(product)} aria-label={`Add ${product.name} to cart`}>+</button></div></article>)}{visibleProducts.length === 0 && <div className="empty-state"><strong>No products found</strong><span>Try another search.</span></div>}</div>{cart.length > 0 && <button className="floating-cart" onClick={() => go('cart')}>View cart · {naira.format(cartTotal)}</button>}</section></AppShell>
+  if (screen === 'store') return <AppShell onBack={go}><section className="storefront"><div className="store-identity"><div className="avatar">{merchant.business.slice(0,2).toUpperCase()}</div><div><h1>{merchant.business}</h1><p>Shop securely and track every order.</p></div><button className="cart-button" onClick={() => go('cart')} aria-label="Open cart"><NavIcon type="products"/><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)}</span></button></div><input className="search" type="search" value={storeSearch} onChange={event => setStoreSearch(event.target.value)} placeholder="Search products"/><div className="store-trust"><span>✓ Secure payments</span><span>✓ Order tracking</span></div>{notice && <div className="notice">{notice}</div>}<div className="store-product-grid">{visibleProducts.map(product => { const soldOut = Number(product.stock_quantity ?? 1) === 0; return <article className={`store-product-card${soldOut ? ' unavailable' : ''}`} key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}>{soldOut && <span className="stock-badge sold-out">Out of stock</span>}</div><small>{product.category}</small><h3>{product.name}</h3><p>{product.description}</p><div><strong>{naira.format(product.price)}</strong><button disabled={soldOut} onClick={() => addToCart(product)} aria-label={`Add ${product.name} to cart`}>{soldOut ? '×' : '+'}</button></div></article>})}{visibleProducts.length === 0 && <div className="empty-state"><strong>No products found</strong><span>Try another search.</span></div>}</div>{cart.length > 0 && <button className="floating-cart" onClick={() => go('cart')}>View cart · {naira.format(cartTotal)}</button>}</section></AppShell>
 
   if (screen === 'cart') return <AppShell onBack={go} back="store" title="Your cart"><section className="form cart-screen"><div className="section-title"><h1>Your cart</h1><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)} items</span></div>{cart.map(entry => <article className="cart-item" key={entry.product.id}><div className="product-image" style={{ backgroundImage: `url(${entry.product.image_url || seedProducts[0].image_url})` }}/><div><h3>{entry.product.name}</h3><strong>{naira.format(entry.product.price)}</strong><div className="quantity-control"><button onClick={() => changeCartQuantity(entry.product.id, -1)}>−</button><span>{entry.quantity}</span><button onClick={() => changeCartQuantity(entry.product.id, 1)}>+</button></div></div></article>)}<div className="card rows"><p><span>Subtotal</span><b>{naira.format(cartTotal)}</b></p><p className="strong"><span>Total before delivery</span><b>{naira.format(cartTotal)}</b></p></div><button disabled={cart.length === 0} onClick={() => go('store-delivery')}>Continue to checkout</button><button className="link" onClick={() => go('store')}>Keep shopping</button></section></AppShell>
 
