@@ -9,6 +9,11 @@ const seedOrders = [
   { id: 'OF-1022', name: 'Mariam Musa', item: 'Skincare bundle', qty: 3, amount: 31200, channel: 'WhatsApp', status: 'Delivered', createdAt: '2026-09-12T14:05:00+01:00' },
 ]
 
+const seedProducts = [
+  { id: 'sample-1', name: 'Classic handbag', description: 'A polished everyday carry.', price: 28000, category: 'Fashion', image_url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80', active: true },
+  { id: 'sample-2', name: 'Glow skincare set', description: 'A simple daily care bundle.', price: 24500, category: 'Beauty', image_url: 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&w=700&q=80', active: true },
+]
+
 function AppShell({ children, back, title, onBack, merchantHeader = false, merchantName = '', onNotifications, onProfile }) {
   const [theme, setTheme] = useState('light')
 
@@ -90,6 +95,7 @@ function NavIcon({ type }) {
   const paths = {
     dashboard: <><path d="m3 11 9-7 9 7"/><path d="M5 10v10h14V10M9 20v-6h6v6"/></>,
     orders: <><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    products: <><path d="M4 7h16l-1 13H5L4 7Z"/><path d="M8 7a4 4 0 0 1 8 0"/></>,
     buyers: <><circle cx="9" cy="8" r="3"/><circle cx="17" cy="10" r="2"/><path d="M3 20c.5-4 2.8-6 6-6s5.5 2 6 6M15 15c3 0 5 1.7 6 5"/></>,
     profile: <><circle cx="12" cy="8" r="4"/><path d="M4 21c.7-5 3.6-8 8-8s7.3 3 8 8"/></>,
   }
@@ -100,6 +106,7 @@ function MerchantNav({ active, onNavigate }) {
   const items = [
     ['dashboard', 'Home'],
     ['orders', 'Orders'],
+    ['products', 'Products'],
     ['buyers', 'Buyers'],
     ['profile', 'Profile'],
   ]
@@ -151,6 +158,12 @@ export default function Home() {
   const [orderSearch, setOrderSearch] = useState('')
   const [orderFilter, setOrderFilter] = useState('All')
   const [editingOrder, setEditingOrder] = useState(null)
+  const [products, setProducts] = useState(seedProducts)
+  const [productDraft, setProductDraft] = useState({ name: '', description: '', price: '', category: 'Fashion', image: null })
+  const [productBusy, setProductBusy] = useState(false)
+  const [cart, setCart] = useState([])
+  const [storeSearch, setStoreSearch] = useState('')
+  const [storeMerchantId, setStoreMerchantId] = useState('')
 
   useEffect(() => {
     const saved = localStorage.getItem('orderflow-state')
@@ -161,11 +174,33 @@ export default function Home() {
     if (rememberedEmail) setAuth(current => ({ ...current, email: rememberedEmail }))
     const params = new URLSearchParams(window.location.search)
     const hasPaymentReturn = params.has('reference')
-    const hasPublicOrder = params.has('order') || params.has('track')
+    const hasPublicOrder = params.has('order') || params.has('track') || params.has('store')
     const timer = hasPaymentReturn || hasPublicOrder
       ? null
       : setTimeout(() => setScreen(current => current === 'splash' ? 'welcome' : current), 1800)
     return () => clearTimeout(timer)
+  }, [])
+
+  useEffect(() => {
+    const merchantId = new URLSearchParams(window.location.search).get('store')
+    if (!merchantId) return
+    setStoreMerchantId(merchantId)
+    setScreen('public-loading')
+    if (!supabase) {
+      setProducts(seedProducts)
+      setScreen('store')
+      return
+    }
+    supabase.rpc('get_public_store', { p_merchant: merchantId }).maybeSingle().then(({ data, error }) => {
+      if (error || !data) {
+        setNotice('This storefront is unavailable.')
+        setScreen('public-error')
+        return
+      }
+      setMerchant(current => ({ ...current, business: data.business_name || 'OrderFlow Store', phone: data.phone || '' }))
+      setProducts(Array.isArray(data.products) ? data.products : [])
+      setScreen('store')
+    })
   }, [])
 
   useEffect(() => {
@@ -212,6 +247,8 @@ export default function Home() {
         if (parsed.selected) setSelected(parsed.selected)
         if (parsed.draft) setDraft(parsed.draft)
         if (parsed.merchant) setMerchant(current => ({ ...current, ...parsed.merchant }))
+        if (parsed.storeMerchantId) setStoreMerchantId(parsed.storeMerchantId)
+        if (parsed.cart) setCart(parsed.cart)
       } catch {}
     }
     setPaymentBusy(true)
@@ -239,10 +276,11 @@ export default function Home() {
     if (!supabase || !session) return
     const loadAccount = async () => {
       const params = new URLSearchParams(window.location.search)
-      const isPublicFlow = params.has('order') || params.has('track') || params.has('reference')
-      const [{ data: profile }, { data: savedOrders }] = await Promise.all([
+      const isPublicFlow = params.has('order') || params.has('track') || params.has('reference') || params.has('store')
+      const [{ data: profile }, { data: savedOrders }, { data: savedProducts }] = await Promise.all([
         supabase.from('profiles').select('full_name,business_name,phone').eq('id', session.user.id).maybeSingle(),
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
+        supabase.from('products').select('*').order('created_at', { ascending: false }),
       ])
       const googleName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || ''
       if (profile) {
@@ -266,6 +304,7 @@ export default function Home() {
         deliveryFee: Number(order.delivery_fee),
         address: order.delivery_address,
       })))
+      if (savedProducts) setProducts(savedProducts)
       if (!isPublicFlow) {
         if (window.location.hash) window.history.replaceState({}, '', window.location.pathname)
         setScreen(profile?.business_name ? 'dashboard' : 'setup')
@@ -292,6 +331,8 @@ export default function Home() {
       return matchesSearch && matchesFilter
     })
   }, [orders, orderSearch, orderFilter])
+  const visibleProducts = useMemo(() => products.filter(product => product.active !== false && (!storeSearch.trim() || [product.name, product.category].some(value => String(value || '').toLowerCase().includes(storeSearch.trim().toLowerCase())))), [products, storeSearch])
+  const cartTotal = useMemo(() => cart.reduce((sum, entry) => sum + Number(entry.product.price) * entry.quantity, 0), [cart])
   const go = (next) => { setScreen(next); setNotice(''); window.scrollTo(0, 0) }
   const field = (key, label, type = 'text', placeholder = '') => <label><span>{label}</span><input type={type} value={draft[key]} placeholder={placeholder} onChange={e => setDraft({ ...draft, [key]: e.target.value })} /></label>
   const authField = (key, label, type = 'text', placeholder = '') => <label><span>{label}</span><input type={type} value={auth[key]} placeholder={placeholder} onChange={e => setAuth({ ...auth, [key]: e.target.value })} /></label>
@@ -456,6 +497,71 @@ export default function Home() {
     setNotice('Profile saved')
   }
 
+  const saveProduct = async () => {
+    if (!productDraft.name.trim() || Number(productDraft.price) <= 0) return setNotice('Add a product name and valid price.')
+    setProductBusy(true)
+    setNotice('')
+    try {
+      let imageUrl = ''
+      if (supabase && session && productDraft.image) {
+        const extension = productDraft.image.name.split('.').pop() || 'jpg'
+        const path = `${session.user.id}/${crypto.randomUUID()}.${extension}`
+        const { error: uploadError } = await supabase.storage.from('product-images').upload(path, productDraft.image, { upsert: false })
+        if (uploadError) throw uploadError
+        imageUrl = supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl
+      }
+      const product = { merchant_id: session?.user?.id, name: productDraft.name.trim(), description: productDraft.description.trim(), price: Number(productDraft.price), category: productDraft.category, image_url: imageUrl, active: true }
+      if (supabase && session) {
+        const { data, error } = await supabase.from('products').insert(product).select().single()
+        if (error) throw error
+        setProducts(current => [data, ...current])
+      } else setProducts(current => [{ ...product, id: crypto.randomUUID(), image_url: imageUrl || seedProducts[0].image_url }, ...current])
+      setProductDraft({ name: '', description: '', price: '', category: 'Fashion', image: null })
+      go('products')
+    } catch (error) { setNotice(error.message) } finally { setProductBusy(false) }
+  }
+
+  const toggleProduct = async (product) => {
+    const next = !product.active
+    if (supabase && session && !String(product.id).startsWith('sample-')) {
+      const { error } = await supabase.from('products').update({ active: next, updated_at: new Date().toISOString() }).eq('id', product.id)
+      if (error) return setNotice(error.message)
+    }
+    setProducts(current => current.map(item => item.id === product.id ? { ...item, active: next } : item))
+  }
+
+  const addToCart = (product) => {
+    setCart(current => {
+      const found = current.find(entry => entry.product.id === product.id)
+      return found ? current.map(entry => entry.product.id === product.id ? { ...entry, quantity: entry.quantity + 1 } : entry) : [...current, { product, quantity: 1 }]
+    })
+  }
+
+  const changeCartQuantity = (productId, change) => setCart(current => current.map(entry => entry.product.id === productId ? { ...entry, quantity: Math.max(0, entry.quantity + change) } : entry).filter(entry => entry.quantity > 0))
+
+  const createCartOrder = async () => {
+    if (!draft.name || !draft.email || !draft.address || cart.length === 0) return setNotice('Add your name, email and delivery address.')
+    const itemName = cart.map(entry => `${entry.product.name} × ${entry.quantity}`).join(', ')
+    const quantity = cart.reduce((sum, entry) => sum + entry.quantity, 0)
+    if (!supabase || !storeMerchantId) return setNotice('This storefront checkout requires a connected store.')
+    const orderNumber = `OF-${Date.now().toString().slice(-6)}`
+    const cartPayload = cart.map(entry => ({ product_id: entry.product.id, quantity: entry.quantity }))
+    const { data, error } = await supabase.rpc('create_store_order', { p_merchant: storeMerchantId, p_order_number: orderNumber, p_customer_name: draft.name, p_customer_phone: draft.phone || '', p_cart: cartPayload, p_delivery_address: draft.address }).maybeSingle()
+    if (error || !data) return setNotice(error?.message || 'The order could not be created.')
+    const secureTotal = Number(data.total)
+    const order = { id: orderNumber, publicToken: data.public_token, name: draft.name, phone: draft.phone, item: itemName, qty: 1, unitPrice: secureTotal, deliveryFee: 0, amount: secureTotal, address: draft.address, status: 'Confirmed', createdAt: new Date().toISOString() }
+    setSelected(order)
+    setDraft(current => ({ ...current, item: itemName, qty: 1, price: String(secureTotal), delivery: '0' }))
+    go('payment')
+  }
+
+  const shareStore = async () => {
+    const url = `${window.location.origin}/?store=${encodeURIComponent(session?.user?.id || '')}`
+    if (navigator.share) return navigator.share({ title: `${merchant.business} catalogue`, text: `Shop from ${merchant.business} on OrderFlow`, url })
+    await navigator.clipboard.writeText(url)
+    setNotice('Store link copied')
+  }
+
   const signOut = async () => {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
@@ -468,7 +574,7 @@ export default function Home() {
     setPaymentBusy(true)
     setNotice('')
     try {
-      sessionStorage.setItem('orderflow-buyer-order', JSON.stringify({ selected, draft, merchant: { business: merchant.business, phone: merchant.phone } }))
+      sessionStorage.setItem('orderflow-buyer-order', JSON.stringify({ selected, draft, merchant: { business: merchant.business, phone: merchant.phone }, storeMerchantId, cart }))
       const response = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -509,6 +615,16 @@ export default function Home() {
 
   if (screen === 'dashboard') return <AppShell onBack={go} merchantHeader merchantName={merchant.name} onNotifications={() => setNotificationsOpen(value => !value)} onProfile={() => go('profile')}><section className="dashboard"><div className="dash-head"><div><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div></div>{notificationsOpen && <aside className="notification-panel"><div><strong>Notifications</strong><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications">×</button></div><p><b>Payment received</b><span>An order payment has been confirmed.</span></p><p><b>Order update</b><span>Review your awaiting orders.</span></p></aside>}<CommerceBanner /><button className="create-order-button" onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>{orderStats.awaiting}</b></div><div><span>Active</span><b>{orderStats.active}</b></div><div><span>Issues</span><b>{orderStats.issues}</b></div></div><div className="dashboard-workspace"><div className="recent-orders-panel"><div className="section-title"><h2>Recent orders</h2><button className="section-link" onClick={() => go('orders')}>View all</button></div><div className="orders">{orders.slice(0,5).map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.qty} item{order.qty > 1 ? 's' : ''} · {naira.format(order.amount)}</span><small>{order.channel} · {orderDate.format(new Date(order.createdAt || Date.now()))}</small></div><em className={order.status.toLowerCase().replaceAll(' ','-')}>{order.status}</em></button>)}{orders.length === 0 && <div className="empty-state"><strong>No orders yet</strong><span>Create your first order to see it here.</span></div>}</div></div><aside className="dashboard-support"><div className="section-title"><h2>Quick actions</h2></div><button className="quick-action" onClick={() => go('create')}><NavIcon type="orders"/><span><b>Create new order</b><small>Prepare a secure buyer link</small></span></button><button className="quick-action" onClick={() => go('buyers')}><NavIcon type="buyers"/><span><b>View buyers</b><small>Open your customer directory</small></span></button><button className="quick-action" onClick={() => go('profile')}><NavIcon type="profile"/><span><b>Business profile</b><small>Review your store details</small></span></button><div className="activity-note"><span>Today</span><strong>{orderStats.active} active order{orderStats.active === 1 ? '' : 's'}</strong><small>Keep buyers informed as orders progress.</small></div></aside></div></section><MerchantNav active="dashboard" onNavigate={go}/></AppShell>
 
+  if (screen === 'products') return <AppShell onBack={go} back="dashboard" title="Products"><section className="dashboard products-screen"><div className="catalogue-head"><div><h1>Your catalogue</h1><p>Products buyers can browse and add to their cart.</p></div><button onClick={() => go('add-product')}>+ Add product</button></div><div className="store-share-card"><span><b>Your public store</b><small>Share one link for buyers to browse and checkout.</small></span><button className="secondary" onClick={shareStore}>Copy or share link</button></div>{notice && <div className="notice">{notice}</div>}<div className="merchant-product-grid">{products.map(product => <article className={`merchant-product-card${product.active === false ? ' unavailable' : ''}`} key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}/><div><small>{product.category}</small><h3>{product.name}</h3><strong>{naira.format(product.price)}</strong><button className="secondary" onClick={() => toggleProduct(product)}>{product.active === false ? 'Make available' : 'Mark unavailable'}</button></div></article>)}</div></section><MerchantNav active="products" onNavigate={go}/></AppShell>
+
+  if (screen === 'add-product') return <AppShell onBack={go} back="products" title="Add product"><section className="form product-form"><h1>Add to your catalogue</h1><p>Use a clear photo and a simple description buyers can understand quickly.</p><label><span>Product image</span><input type="file" accept="image/*" onChange={event => setProductDraft({ ...productDraft, image: event.target.files?.[0] || null })}/></label><label><span>Product name</span><input value={productDraft.name} placeholder="e.g. Classic handbag" onChange={event => setProductDraft({ ...productDraft, name: event.target.value })}/></label><label><span>Short description</span><input value={productDraft.description} placeholder="What should the buyer know?" onChange={event => setProductDraft({ ...productDraft, description: event.target.value })}/></label><div className="two"><label><span>Price</span><input type="number" min="0" value={productDraft.price} placeholder="₦ 0" onChange={event => setProductDraft({ ...productDraft, price: event.target.value })}/></label><label><span>Category</span><select value={productDraft.category} onChange={event => setProductDraft({ ...productDraft, category: event.target.value })}><option>Fashion</option><option>Beauty</option><option>Food</option><option>Electronics</option><option>Home</option><option>Other</option></select></label></div>{notice && <div className="notice">{notice}</div>}<button disabled={productBusy} onClick={saveProduct}>{productBusy ? 'Saving product…' : 'Add product'}</button></section><MerchantNav active="products" onNavigate={go}/></AppShell>
+
+  if (screen === 'store') return <AppShell onBack={go}><section className="storefront"><div className="store-identity"><div className="avatar">{merchant.business.slice(0,2).toUpperCase()}</div><div><h1>{merchant.business}</h1><p>Shop securely and track every order.</p></div><button className="cart-button" onClick={() => go('cart')} aria-label="Open cart"><NavIcon type="products"/><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)}</span></button></div><input className="search" type="search" value={storeSearch} onChange={event => setStoreSearch(event.target.value)} placeholder="Search products"/><div className="store-trust"><span>✓ Secure payments</span><span>✓ Order tracking</span></div><div className="store-product-grid">{visibleProducts.map(product => <article className="store-product-card" key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}/><small>{product.category}</small><h3>{product.name}</h3><p>{product.description}</p><div><strong>{naira.format(product.price)}</strong><button onClick={() => addToCart(product)} aria-label={`Add ${product.name} to cart`}>+</button></div></article>)}{visibleProducts.length === 0 && <div className="empty-state"><strong>No products found</strong><span>Try another search.</span></div>}</div>{cart.length > 0 && <button className="floating-cart" onClick={() => go('cart')}>View cart · {naira.format(cartTotal)}</button>}</section></AppShell>
+
+  if (screen === 'cart') return <AppShell onBack={go} back="store" title="Your cart"><section className="form cart-screen"><div className="section-title"><h1>Your cart</h1><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)} items</span></div>{cart.map(entry => <article className="cart-item" key={entry.product.id}><div className="product-image" style={{ backgroundImage: `url(${entry.product.image_url || seedProducts[0].image_url})` }}/><div><h3>{entry.product.name}</h3><strong>{naira.format(entry.product.price)}</strong><div className="quantity-control"><button onClick={() => changeCartQuantity(entry.product.id, -1)}>−</button><span>{entry.quantity}</span><button onClick={() => changeCartQuantity(entry.product.id, 1)}>+</button></div></div></article>)}<div className="card rows"><p><span>Subtotal</span><b>{naira.format(cartTotal)}</b></p><p className="strong"><span>Total before delivery</span><b>{naira.format(cartTotal)}</b></p></div><button disabled={cart.length === 0} onClick={() => go('store-delivery')}>Continue to checkout</button><button className="link" onClick={() => go('store')}>Keep shopping</button></section></AppShell>
+
+  if (screen === 'store-delivery') return <AppShell onBack={go} back="cart" title="Delivery details"><section className="form"><p>Where should {merchant.business} deliver your order?</p>{field('name','Full name')}{field('phone','Phone number','tel')}{field('email','Email address','email','you@example.com')}{field('address','Delivery address','text','Street, area and city')}<div className="total"><span>Cart total</span><b>{naira.format(cartTotal)}</b></div>{notice && <div className="notice">{notice}</div>}<button onClick={createCartOrder}>Continue to payment</button></section></AppShell>
+
   if (screen === 'orders') return <AppShell onBack={go} back="dashboard" title="All orders"><section className="dashboard orders-screen"><div className="orders-summary"><span><b>{orders.length}</b> total</span><span><b>{orderStats.awaiting}</b> awaiting</span><span><b>{orderStats.active}</b> active</span></div><input className="search" type="search" value={orderSearch} onChange={event => setOrderSearch(event.target.value)} placeholder="Search order, buyer, phone or item"/><div className="filter-row" aria-label="Filter orders">{['All','Pending','Confirmed','Paid','Out for delivery','Delivered','Cancelled'].map(filter => <button key={filter} className={orderFilter === filter ? 'active' : ''} onClick={() => setOrderFilter(filter)}>{filter}</button>)}</div><div className="orders order-list">{filteredOrders.map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.item} × {order.qty} · {naira.format(order.amount)}</span><small>{orderDate.format(new Date(order.createdAt || Date.now()))}</small></div><em className={order.status.toLowerCase().replaceAll(' ','-')}>{order.status}</em></button>)}{filteredOrders.length === 0 && <div className="empty-state"><strong>No matching orders</strong><span>Try another search or status filter.</span></div>}</div><button className="orders-create" onClick={() => go('create')}>+ Create new order</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
 
   if (screen === 'create') return <AppShell onBack={go} back="dashboard" title="Create order"><section className="form"><p className="step">Step 1 of 2 · Order details</p>{field('name','Customer name','text','Enter customer’s name')}{field('phone','Phone number','tel','0801 234 5678')}{field('item','Item or service','text','e.g. Leather handbag')}<div className="two">{field('qty','Quantity','number')}{field('price','Unit price','number','₦ 0.00')}</div>{field('delivery','Delivery fee','number','₦ 0.00')}<div className="total"><span>Order total</span><b>{naira.format(total)}</b></div><button disabled={!draft.name || !draft.item || !draft.price} onClick={() => go('review')}>Continue</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
@@ -532,7 +648,7 @@ export default function Home() {
 
   if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form payment-form"><div className="payment-summary"><span>Amount to pay</span><strong>{naira.format(total || 18500)}</strong><small>Protected checkout · Test mode</small></div><label className={`choice ${paymentMethod === 'paystack' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => { setPaymentMethod('paystack'); setNotice('') }}/><span><b>Paystack checkout</b><small>Card, USSD and mobile money</small></span><em>Recommended</em></label><label className={`choice ${paymentMethod === 'bank-transfer' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'bank-transfer'} onChange={() => { setPaymentMethod('bank-transfer'); setNotice('') }}/><span><b>Bank transfer</b><small>Pay securely by transfer through Paystack</small></span></label><label className={`choice ${paymentMethod === 'escrow' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'escrow'} onChange={() => setPaymentMethod('escrow')}/><span><b>Protected payment (Escrow)</b><small>Funds released after delivery · Coming soon</small></span></label><label className={`choice ${paymentMethod === 'opay' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required · Coming soon</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : paymentMethod === 'escrow' || paymentMethod === 'opay' ? 'Check availability' : `Pay ${naira.format(total || 18500)}`}</button><small className="center payment-note">Paystack is currently in test mode. No real money will be charged.</small></section></AppShell>
 
-  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={openTracking}>Track my order</button><button className="secondary" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
+  if (screen === 'paid') return <AppShell onBack={go} back="dashboard"><section className="success"><div className="check">✓</div><h1>Payment successful</h1><p>Your seller has been notified.</p><article className="card rows"><p><span>Amount paid</span><b>{naira.format(total || selected?.amount || 18500)}</b></p><p><span>Order ID</span><b>{selected?.id || 'Order'}</b></p><p><span>Method</span><b>Paystack</b></p></article><button onClick={openTracking}>Track my order</button>{storeMerchantId && <button className="secondary" onClick={() => go('store')}>Continue shopping</button>}<button className="link" onClick={() => go('welcome')}>Back to OrderFlow</button></section></AppShell>
 
   if (screen === 'tracking') {
     const status = selected?.status || 'Pending'
