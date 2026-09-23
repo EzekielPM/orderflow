@@ -1,0 +1,7 @@
+'use client'
+export function ItemRows({items,onChange}) {
+  function change(index,key,value){onChange(items.map((item,i)=>i===index?{...item,[key]:value}:item))}
+  return <div>{items.map((item,index)=><fieldset key={index} style={{border:'1px solid #b8cdd3',borderRadius:14,padding:16,margin:'12px 0'}}><legend>Item {index+1}</legend><label>Item or service<input required value={item.name} onChange={e=>change(index,'name',e.target.value)}/></label><div className="two"><label>Quantity<input type="number" min="1" step="1" value={item.quantity} onChange={e=>change(index,'quantity',e.target.value)}/></label><label>Unit price<input type="number" min="0" step="0.01" value={item.unit_price} onChange={e=>change(index,'unit_price',e.target.value)}/></label></div>{items.length>1&&<button type="button" className="secondary" onClick={()=>onChange(items.filter((_,i)=>i!==index))}>Remove item</button>}</fieldset>)}<button type="button" className="secondary" disabled={items.length>=50} onClick={()=>onChange([...items,{name:'',quantity:1,unit_price:''}])}>Add item +</button></div>
+}
+export const validItems=items=>items.length>0&&items.every(i=>i.name.trim()&&Number.isInteger(Number(i.quantity))&&Number(i.quantity)>0&&i.unit_price!==''&&Number.isFinite(Number(i.unit_price))&&Number(i.unit_price)>=0)
+export const itemTotal=items=>items.reduce((sum,i)=>sum+Math.round(Number(i.unit_price||0)*100)*Number(i.quantity||0),0)/100
