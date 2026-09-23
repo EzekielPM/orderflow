@@ -540,3 +540,44 @@ button, b, strong { font-weight: 600; }
   .paid-item > strong { grid-column: 2; }
   .phone > nav button { font-size: 11px; }
 }
+
+/* Compact order entry and buyer account flow */
+.compact-items { margin: 12px 0; }
+.compact-item { position:relative; min-width:0; margin:10px 0; padding:10px 14px 12px; border:1px solid var(--line); border-radius:16px; }
+.compact-item legend { padding:0 6px; font-size:12px; color:var(--muted); }
+.compact-item label { margin:5px 0; font-size:13px; font-weight:400; }
+.compact-item input { margin-top:5px; padding:10px 12px; min-height:44px; }
+.item-numbers { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); gap:12px; }
+.compact-item .item-remove { position:absolute; right:5px; top:-26px; padding:6px; width:40px; height:40px; font-size:22px; color:var(--muted); background:transparent; }
+.small-action { display:inline-block; width:auto; padding:10px 4px; background:transparent; color:var(--teal); font-size:14px; font-weight:500; }
+.compact-items .add-item { border:1px solid var(--line); border-radius:10px; padding:10px 16px; }
+.item-note { margin-top:8px; font-size:13px; color:var(--muted); }
+.item-note summary { cursor:pointer; padding:5px 0; }
+.item-note textarea { width:100%; resize:vertical; font:inherit; padding:10px; background:var(--soft); color:var(--ink); border:1px solid var(--line); border-radius:10px; }
+.item-note-copy { display:block; font-weight:400; margin-top:5px; color:var(--muted); white-space:pre-wrap; }
+.store-account-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:5px 14px; background:var(--soft); border:1px solid var(--line); border-radius:14px; margin:16px 0; }
+.store-account-bar button { background:transparent; color:var(--ink); font-weight:500; margin:0; width:auto; min-height:44px; padding:8px 4px; }
+.account-entry { display:flex; align-items:center; gap:10px; text-align:left; }
+.account-entry svg,.account-cart svg { width:24px; height:24px; flex-shrink:0; }
+.account-cart { display:flex; align-items:center; gap:8px; }
+.account-cart span { background:var(--teal); color:white; border-radius:20px; min-width:24px; padding:3px; font-size:12px; }
+.buyer-account-panel { border:1px solid var(--line); border-radius:16px; padding:20px; margin:16px 0; overflow-wrap:anywhere; }
+.buyer-account-panel p,.buyer-account-panel small { color:var(--muted); }
+.saved-buyer-order { display:flex; justify-content:space-between; gap:16px; padding:15px 0; border-bottom:1px solid var(--line); text-decoration:none; font-weight:400; }
+.saved-buyer-order small { display:block; margin-top:6px; }
+.buyer-auth { width:min(100%,520px); margin:24px auto; border:1px solid var(--line); border-radius:24px; background:#fff; color:var(--ink); overflow:hidden; }
+.buyer-auth header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 20px; border-bottom:1px solid var(--line); }
+.buyer-back { font-size:30px; font-weight:400; text-decoration:none; }
+.buyer-auth section { padding:24px clamp(18px,5vw,36px) 32px; }
+.buyer-auth h1 { font-size:28px; font-weight:600; margin:12px 0; }
+.buyer-auth section>p { color:var(--muted); line-height:1.6; }
+.buyer-auth label { font-size:14px; font-weight:400; }
+.buyer-auth input { margin-top:8px; }
+.buyer-auth form>button:not(.small-action) { margin-top:18px; font-weight:600; }
+.buyer-auth .forgot-link { float:right; }
+.guest-link { display:block; text-align:center; margin:22px 0; font-weight:500; }
+.buyer-cart-reminder { background:var(--soft); border-radius:16px; padding:20px; margin-top:30px; }
+.buyer-cart-reminder p { color:var(--muted); margin-bottom:0; }
+.buyer-signup-prompt { display:block; padding:18px; margin:18px 0; border:1px solid var(--line); border-radius:14px; font-weight:500; }
+[data-theme="dark"] .buyer-auth { background:#102d39; }
+@media(max-width:540px){.buyer-auth{margin:0 auto;min-height:100dvh;border-radius:0;border:0}.store-account-bar{font-size:14px}}
