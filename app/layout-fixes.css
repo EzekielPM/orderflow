@@ -356,7 +356,7 @@ button, b, strong { font-weight: 600; }
 }
 
 /* Product catalogue and buyer storefront */
-.phone > nav { grid-template-columns: repeat(5, 1fr); }
+.phone > nav { grid-template-columns: repeat(4, 1fr); }
 .catalogue-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .catalogue-head h1, .catalogue-head p { margin: 0; }
 .catalogue-head p { margin-top: 6px; color: var(--muted); }
