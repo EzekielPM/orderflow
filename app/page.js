@@ -738,7 +738,16 @@ export default function Home() {
 
   const startPayment = async () => {
     if (paymentMethod === 'opay') return setNotice('OPay setup requires approved merchant API credentials. Choose Paystack or Bank transfer for this test payment.')
-    if (paymentMethod === 'escrow') return setNotice('Protected payments will be enabled in the next update.')
+    if (paymentMethod === 'escrow') {
+  if (!selected?.publicToken) {
+    return setNotice('Open a valid buyer order link to use protected payment.')
+  }
+
+  window.location.assign(
+    `/protected-payment?order=${encodeURIComponent(selected.publicToken)}`
+  )
+  return
+}
     setPaymentBusy(true)
     setNotice('')
     try {
