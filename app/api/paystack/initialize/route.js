@@ -10,6 +10,9 @@ export async function POST(request) {
     const { email, orderId, orderToken, paymentMethod = 'paystack' } = await request.json()
     if (!email) return NextResponse.json({ message: 'A buyer email address is required for payment.' }, { status: 400 })
     const { amountKobo, supabase, order } = await getOrderForPayment(orderId, orderToken)
+    if (order.payment_status === 'paid' || order.payment_status === 'refunded') {
+      return NextResponse.json({ message: 'This order already has a completed payment. Open its tracking link for the latest status.' }, { status: 409 })
+    }
     const { data: existing, error: lookupError } = await supabase.from('protected_payments_test').select('id').eq('order_id', order.id).maybeSingle()
     if (lookupError && !['42P01','PGRST205'].includes(lookupError.code)) throw lookupError
     let protectedRecord, buyerEmail=email
