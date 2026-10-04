@@ -1,64 +1,22 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Children, useEffect, useMemo, useRef, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { ItemRows, validItems, itemTotal } from './order-items'
 import StoreAccount from './store-account'
-import './shop/shop.css'
-import {readCart,writeCart,buyerLink} from '../lib/buyer-context'
-
-const seedOrders = [
-  { id: 'OF-1024', name: 'Ada Okafor', item: 'Leather handbag', qty: 1, amount: 18500, channel: 'Instagram', status: 'Pending', createdAt: '2026-09-21T10:42:00+01:00' },
-  { id: 'OF-1023', name: 'Tunde Bello', item: 'Wireless earbuds', qty: 1, amount: 7000, channel: 'WhatsApp', status: 'Confirmed', createdAt: '2026-09-20T16:18:00+01:00' },
-  { id: 'OF-1022', name: 'Mariam Musa', item: 'Skincare bundle', qty: 3, amount: 31200, channel: 'WhatsApp', status: 'Delivered', createdAt: '2026-09-12T14:05:00+01:00' },
-]
-
-const seedProducts = [
-  { id: 'sample-1', name: 'Classic handbag', description: 'A polished everyday carry.', price: 28000, category: 'Fashion', image_url: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=80', stock_quantity: 8, active: true },
-  { id: 'sample-2', name: 'Glow skincare set', description: 'A simple daily care bundle.', price: 24500, category: 'Beauty', image_url: 'https://images.unsplash.com/photo-1556229010-6c3f2c9ca5f8?auto=format&fit=crop&w=700&q=80', stock_quantity: 12, active: true },
-]
+import {readCart,writeCart,buyerLink,rememberStore} from '../lib/buyer-context'
+import {Icon, ThemeToggle, ProductPhoto, BuyerNav, CheckoutSummary, VendorOverview, TrackingView, StatusBadge} from './experience'
 
 function AppShell({ children, back, title, onBack, merchantHeader = false, merchantName = '', onNotifications, onProfile }) {
-  const [theme, setTheme] = useState('light')
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('orderflow-theme')
-    const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    const nextTheme = savedTheme || preferred
-    setTheme(nextTheme)
-    document.documentElement.dataset.theme = nextTheme
-  }, [])
-
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark'
-    setTheme(nextTheme)
-    document.documentElement.dataset.theme = nextTheme
-    localStorage.setItem('orderflow-theme', nextTheme)
-  }
-
-  return (
-    <main className="phone">
-      <header className={`topbar${merchantHeader ? ' merchant-topbar' : ''}`}>
-        {merchantHeader ? (
-          <>
-            <OrderFlowLogo compact />
-            <div className="topbar-actions">
-              <button className="notification-button" onClick={onNotifications} aria-label="Open notifications"><BellIcon /><span /></button>
-              <button className="avatar avatar-button" onClick={onProfile} aria-label="Open profile">{merchantName.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase() || 'OF'}</button>
-              <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span></button>
-            </div>
-          </>
-        ) : (
-          <>
-            {back ? <button className="icon back-button" onClick={() => onBack(back)} aria-label="Go back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6" /></svg></button> : <span />}
-            {title && <strong>{title}</strong>}
-            <button className="theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}><span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span></button>
-          </>
-        )}
-      </header>
-      {children}
-    </main>
-  )
+  const isMerchant = merchantHeader || Children.toArray(children).some(child => child.type === MerchantNav)
+  return <main className={`phone experience ${isMerchant ? 'ux-merchant-shell' : 'ux-public-shell'}`}>
+    <header className={`topbar${merchantHeader ? ' merchant-topbar' : ''}`}>
+      {merchantHeader ? <><OrderFlowLogo compact/><div className="topbar-actions">
+        <button className="notification-button" onClick={onNotifications} aria-label="Open order activity"><BellIcon/></button>
+        <button className="avatar avatar-button" onClick={onProfile} aria-label="Open business profile">{merchantName.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase() || 'OF'}</button><ThemeToggle/>
+      </div></> : <>{back ? <button className="icon back-button" onClick={() => onBack(back)} aria-label="Go back"><Icon name="back"/></button> : <a href="/shop" className="ux-header-brand">Order<span>Flow</span></a>}<strong>{title || ''}</strong><ThemeToggle/></>}
+    </header>{children}
+  </main>
 }
 
 function OrderFlowLogo({ compact = false }) {
@@ -108,10 +66,10 @@ function NavIcon({ type }) {
 
 function MerchantNav({ active, onNavigate }) {
   const items = [
-    ['dashboard', 'Home'],
+    ['dashboard', 'Overview'],
     ['orders', 'Orders'],
     ['products', 'Products'],
-    ['profile', 'Profile'],
+    ['profile', 'Business'],
   ]
 
   return (
@@ -119,6 +77,7 @@ function MerchantNav({ active, onNavigate }) {
       {items.map(([screen, label]) => (
         <button
           key={screen}
+          aria-current={active === screen || (screen === 'orders' && active === 'merchant-order') ? 'page' : undefined}
           className={active === screen || (screen === 'orders' && active === 'merchant-order') ? 'active' : ''}
           onClick={() => onNavigate(screen)}
         >
@@ -129,7 +88,7 @@ function MerchantNav({ active, onNavigate }) {
   )
 }
 
-const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 })
+const naira = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 })
 const orderDate = new Intl.DateTimeFormat('en-NG', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 const trackingSteps = ['Confirmed', 'Payment received', 'Out for delivery', 'Delivered']
 
@@ -144,12 +103,12 @@ const trackingCopy = {
 
 export default function Home() {
   const [screen, setScreen] = useState('splash')
-  const [merchant, setMerchant] = useState({ name: 'Ezekiel', business: 'Ezekiel Stores', phone: '', email: '', deliveryFee: 0 })
-  const [orders, setOrders] = useState(seedOrders)
-  const [draft, setDraft] = useState({ name: '', phone: '', email: '', item: '', qty: 1, price: '', delivery: '', address: '' })
+  const [merchant, setMerchant] = useState({ name: '', business: '', phone: '', email: '', deliveryFee: 0 })
+  const [orders, setOrders] = useState([])
+  const [draft, setDraft] = useState({ name: '', phone: '', email: '', item: '', qty: 1, price: '', delivery: '', address: '', note: '' })
   const [newItems, setNewItems] = useState([{name:'',quantity:1,unit_price:''}])
   const [statusDraft,setStatusDraft] = useState(null)
-  const [selected, setSelected] = useState(seedOrders[0])
+  const [selected, setSelected] = useState(null)
   const [notice, setNotice] = useState('')
   const [session, setSession] = useState(null)
   const [auth, setAuth] = useState({ name: '', email: '', password: '' })
@@ -164,7 +123,7 @@ export default function Home() {
   const [orderSearch, setOrderSearch] = useState('')
   const [orderFilter, setOrderFilter] = useState('All')
   const [editingOrder, setEditingOrder] = useState(null)
-  const [products, setProducts] = useState(seedProducts)
+  const [products, setProducts] = useState([])
   const emptyProductDraft = { name: '', description: '', price: '', category: 'Fashion', stock_quantity: '1', images: [], existingImages: [] }
   const [productDraft, setProductDraft] = useState(emptyProductDraft)
   const [editingProduct, setEditingProduct] = useState(null)
@@ -176,6 +135,13 @@ export default function Home() {
   const [storeMerchantId, setStoreMerchantId] = useState('')
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [productImageIndex, setProductImageIndex] = useState(0)
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
+  const checkoutLock = useRef(false)
+  const verificationLock = useRef(false)
+  const [trackingConnection, setTrackingConnection] = useState('online')
+  const [verificationAttempt, setVerificationAttempt] = useState(0)
+  const [accountError, setAccountError] = useState('')
+
 
   useEffect(()=>{
     if(storeMerchantId && cartStoreReady===storeMerchantId)writeCart(storeMerchantId,cart)
@@ -193,11 +159,13 @@ export default function Home() {
       pending=true
       try {
         const {data,error}=await supabase.from('orders').select('*').eq('merchant_id',session.user.id).order('created_at',{ascending:false})
-        if(stopped || error || !data)return
-        const latest=data.map(o=>({id:o.order_number,databaseId:o.id,publicToken:o.public_token,name:o.customer_name,phone:o.customer_phone,item:o.item_name,qty:o.quantity,unitPrice:Number(o.unit_price),deliveryFee:Number(o.delivery_fee),amount:Number(o.unit_price)*o.quantity+Number(o.delivery_fee),channel:o.channel,status:o.status,paymentStatus:o.payment_status,createdAt:o.created_at,updatedAt:o.updated_at,address:o.delivery_address,lineItems:o.line_items||[]}))
+        if(stopped)return
+        if(error || !data){setAccountError('Order updates are paused. Check your connection.');return}
+        setAccountError('')
+        const latest=data.map(o=>({id:o.order_number,databaseId:o.id,publicToken:o.public_token,name:o.customer_name,phone:o.customer_phone,item:o.item_name,qty:o.quantity,unitPrice:Number(o.unit_price),deliveryFee:Number(o.delivery_fee),amount:Number(o.unit_price)*o.quantity+Number(o.delivery_fee),channel:o.channel,status:o.status,paymentStatus:o.payment_status,createdAt:o.created_at,updatedAt:o.updated_at,address:o.delivery_address,note:o.buyer_note,lineItems:o.line_items||[]}))
         setOrders(latest)
         setSelected(current=>latest.find(o=>o.databaseId===current?.databaseId)||current)
-      } finally {pending=false}
+      } catch {if(!stopped)setAccountError('Order updates are paused. Check your connection.')} finally {pending=false}
     }
     syncOrders()
     const timer=setInterval(syncOrders,10000)
@@ -217,8 +185,13 @@ export default function Home() {
           supabase.rpc('get_public_order_tracking',{p_token:token}).maybeSingle(),
           supabase.rpc('get_public_order_lines',{p_token:token}),
         ])
-        if(!stopped && !error && data)setSelected(current=>current?.publicToken===token?{...current,status:data.status,paymentStatus:data.payment_status,updatedAt:data.updated_at,lineItems:Array.isArray(lines)?lines:current.lineItems}:current)
-      }finally{pending=false}
+        if(!stopped){
+          if(error || !data){setTrackingConnection('offline');return}
+          setTrackingConnection('online')
+          setSelected(current=>current?.publicToken===token?{...current,status:data.status,paymentStatus:data.payment_status,updatedAt:data.updated_at,lineItems:Array.isArray(lines)?lines:current.lineItems}:current)
+          setMerchant(current=>({...current,phone:data.merchant_phone || current.phone}))
+        }
+      }catch{if(!stopped)setTrackingConnection('offline')}finally{pending=false}
     }
     syncTracking();const timer=setInterval(syncTracking,10000)
     document.addEventListener('visibilitychange',syncTracking)
@@ -226,10 +199,6 @@ export default function Home() {
   },[selected?.publicToken,screen])
 
   useEffect(() => {
-    const saved = localStorage.getItem('orderflow-state')
-    if (saved) {
-      try { const parsed = JSON.parse(saved); setOrders(parsed.orders || seedOrders); setMerchant(parsed.merchant || merchant) } catch {}
-    }
     const rememberedEmail = localStorage.getItem('orderflow-remembered-email')
     if (rememberedEmail) setAuth(current => ({ ...current, email: rememberedEmail }))
     const params = new URLSearchParams(window.location.search)
@@ -237,18 +206,20 @@ export default function Home() {
     const hasPublicOrder = params.has('order') || params.has('track') || params.has('store')
     const timer = hasPaymentReturn || hasPublicOrder
       ? null
-      : setTimeout(() => setScreen(current => current === 'splash' ? 'welcome' : current), 1800)
+      : setTimeout(() => setScreen(current => current === 'splash' ? 'welcome' : current), 250)
     return () => clearTimeout(timer)
   }, [])
 
   useEffect(() => {
-    const merchantId = new URLSearchParams(window.location.search).get('store')
+    const params = new URLSearchParams(window.location.search)
+    const merchantId = params.get('store')
+    if(params.has('reference'))return
     if (!merchantId) return
     setStoreMerchantId(merchantId)
     setScreen('public-loading')
     if (!supabase) {
-      setProducts(seedProducts)
-      setScreen('store')
+      setNotice('The store could not connect. Please try again shortly.')
+      setScreen('public-error')
       return
     }
     supabase.rpc('get_public_store', { p_merchant: merchantId }).maybeSingle().then(({ data, error }) => {
@@ -260,9 +231,21 @@ export default function Home() {
       setMerchant(current => ({ ...current, business: data.business_name || 'OrderFlow Store', phone: data.phone || '', deliveryFee: Number(data.delivery_fee || 0) }))
       const liveProducts=Array.isArray(data.products)?data.products:[]
       setProducts(liveProducts)
-      setCart(readCart(merchantId).map(entry=>{const product=liveProducts.find(p=>p.id===entry.product.id);return product?{product,quantity:Math.min(entry.quantity,Number(product.stock_quantity??999999))}:null}).filter(entry=>entry&&entry.quantity>0))
+      rememberStore(merchantId,data.business_name)
+      const savedCart = readCart(merchantId)
+      let pending
+      try{pending=JSON.parse(sessionStorage.getItem(`orderflow-checkout:${merchantId}`) || 'null')}catch{}
+      const fingerprint=JSON.stringify(savedCart.map(entry=>({product_id:entry.product.id,quantity:entry.quantity})).sort((a,b)=>a.product_id.localeCompare(b.product_id)))
+      // A retried checkout may already have reserved this stock. Keep its quantities
+      // so the server can return the same order using the same request reference.
+      const isRetry=pending?.fingerprint===fingerprint
+      const cleanCart = savedCart.map(entry=>{const product=liveProducts.find(p=>p.id===entry.product.id);return isRetry?{...entry,product:product || entry.product}:product?{product,quantity:Math.min(entry.quantity,Number(product.stock_quantity??0))}:null}).filter(entry=>entry&&entry.quantity>0)
+      setCart(cleanCart)
+      if(JSON.stringify(savedCart)!==JSON.stringify(cleanCart))setNotice('Your cart has been updated with the latest prices and available quantities. Please review it before paying.')
       setCartStoreReady(merchantId)
-      setScreen('store')
+      const product = liveProducts.find(p=>p.id===params.get('product'))
+      if(product){setSelectedProduct(product);setScreen('product-details')}
+      else setScreen(params.get('view')==='checkout' && cleanCart.length ? 'store-delivery' : params.get('view')==='cart' ? 'cart' : 'store')
     })
   }, [])
 
@@ -281,9 +264,11 @@ export default function Home() {
     setScreen('public-loading')
     Promise.all([
       supabase.rpc('get_public_order', { p_token: token }).maybeSingle(),
-      trackingToken ? supabase.rpc('get_public_order_tracking', { p_token: token }).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      supabase.rpc('get_public_order_tracking', { p_token: token }).maybeSingle(),
+      supabase.rpc('get_public_order_context', {p_token:token}).maybeSingle(),
+      supabase.rpc('get_public_order_lines', {p_token:token}),
     ])
-      .then(([orderResult, trackingResult]) => {
+      .then(([orderResult, trackingResult, contextResult, linesResult]) => {
         const { data, error } = orderResult
         if (error || !data) {
           setNotice('This order link is invalid or no longer available.')
@@ -291,61 +276,58 @@ export default function Home() {
           return
         }
         const liveStatus = trackingResult.data
-        setSelected({ id: data.order_number, publicToken: token, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, unitPrice: Number(data.unit_price), deliveryFee: Number(data.delivery_fee), amount: Number(data.unit_price) * Number(data.quantity) + Number(data.delivery_fee), address: data.delivery_address, status: liveStatus?.status || data.status, createdAt: data.created_at, updatedAt: liveStatus?.updated_at, paymentStatus: liveStatus?.payment_status })
-        setDraft(current => ({ ...current, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, price: String(data.unit_price), delivery: String(data.delivery_fee), address: data.delivery_address || '' }))
+        if(contextResult.data?.merchant_id)setStoreMerchantId(contextResult.data.merchant_id)
+        setSelected({ lineItems:linesResult.data || [],note:contextResult.data?.buyer_note || '', id: data.order_number, publicToken: token, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, unitPrice: Number(data.unit_price), deliveryFee: Number(data.delivery_fee), amount: Number(data.unit_price) * Number(data.quantity) + Number(data.delivery_fee), address: data.delivery_address, status: liveStatus?.status || data.status, createdAt: data.created_at, updatedAt: liveStatus?.updated_at, paymentStatus: liveStatus?.payment_status })
+        setDraft(current => ({ ...current, name: data.customer_name, phone: data.customer_phone, item: data.item_name, qty: data.quantity, price: String(data.unit_price), delivery: String(data.delivery_fee), address: data.delivery_address || '', note:contextResult.data?.buyer_note || '' }))
         setMerchant(current => ({ ...current, business: data.merchant_business || 'OrderFlow merchant', phone: liveStatus?.merchant_phone || current.phone }))
-        setScreen(trackingToken ? 'tracking' : 'confirm')
+        setScreen(trackingToken || liveStatus?.payment_status === 'paid' || ['Cancelled','Delivered','Out for delivery'].includes(data.status) ? 'tracking' : 'confirm')
       })
+      .catch(()=>{setNotice('We could not load this order. Please check your connection and reload.');setScreen('public-error')})
       .finally(() => setPublicOrderLoading(false))
   }, [])
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const reference = params.get('reference')
-    if (!reference) return
-    setPaymentReference(reference)
-    const savedBuyerOrder = sessionStorage.getItem('orderflow-buyer-order')
-    if (savedBuyerOrder) {
+    const reference = new URLSearchParams(window.location.search).get('reference')
+    if (!reference || verificationLock.current) return
+    verificationLock.current = true
+    setPaymentReference(reference); setScreen('payment-check'); setPaymentBusy(true); setNotice('')
+    let saved
+    try { saved = JSON.parse(sessionStorage.getItem('orderflow-buyer-order') || 'null') } catch {}
+    async function verify() {
       try {
-        const parsed = JSON.parse(savedBuyerOrder)
-        if (parsed.selected) setSelected(parsed.selected)
-        if (parsed.draft) setDraft(parsed.draft)
-        if (parsed.merchant) setMerchant(current => ({ ...current, ...parsed.merchant }))
-        if (parsed.storeMerchantId) setStoreMerchantId(parsed.storeMerchantId)
-        if (parsed.cart) setCart(parsed.cart)
-      } catch {}
-    }
-    setPaymentBusy(true)
-    fetch(`/api/paystack/verify?reference=${encodeURIComponent(reference)}`)
-      .then(response => response.json())
-      .then(async result => {
-        if (!result.paid) {
-          setScreen('payment')
-          setNotice(result.message || 'Payment could not be verified.')
-          return
+        const response = await fetch(`/api/paystack/verify?reference=${encodeURIComponent(reference)}`,{cache:'no-store'})
+        const result = await response.json()
+        if (!result.paid) {setNotice(result.message || 'Payment is still being checked. Please check again.');return}
+        if (!supabase || !result.orderToken) throw Error('Your payment was verified, but the order details are still loading. Check again shortly.')
+        const [{data:orderData,error}, {data:tracking}, {data:lines}] = await Promise.all([
+          supabase.rpc('get_public_order',{p_token:result.orderToken}).maybeSingle(),
+          supabase.rpc('get_public_order_tracking',{p_token:result.orderToken}).maybeSingle(),
+          supabase.rpc('get_public_order_lines',{p_token:result.orderToken}),
+        ])
+        if(error || !orderData)throw Error('Your payment was verified. Check again to load your order and tracking link.')
+        const order = {id:orderData.order_number, publicToken:result.orderToken, name:orderData.customer_name, phone:orderData.customer_phone, item:orderData.item_name, qty:orderData.quantity, unitPrice:Number(orderData.unit_price), deliveryFee:Number(orderData.delivery_fee), amount:Number(orderData.unit_price)*Number(orderData.quantity)+Number(orderData.delivery_fee), address:orderData.delivery_address, status:tracking?.status || 'Payment received', paymentStatus:'paid', createdAt:orderData.created_at,updatedAt:tracking?.updated_at,lineItems:lines || []}
+        setSelected(order)
+        setDraft(current=>({...current,name:order.name,phone:order.phone,item:order.item,qty:order.qty,price:String(order.unitPrice),delivery:String(order.deliveryFee),address:order.address}))
+        setMerchant(current=>({...current,business:orderData.merchant_business,phone:tracking?.merchant_phone || ''}))
+        if(result.merchantId){
+          setStoreMerchantId(result.merchantId)
+          // Clear only this purchase, once. A later visit to this receipt must not erase a new cart.
+          try {
+            const marker = `orderflow-cleared-payment:${reference}`
+            if(!localStorage.getItem(marker) && saved?.selected?.publicToken === result.orderToken){
+              const remaining = readCart(result.merchantId).map(row=>({...row,quantity:Math.max(0,row.quantity-(saved.cart?.find(item=>item.product.id===row.product.id)?.quantity || 0))})).filter(row=>row.quantity>0)
+              writeCart(result.merchantId,remaining);localStorage.setItem(marker,'1')
+              sessionStorage.removeItem(`orderflow-checkout:${result.merchantId}`)
+            }
+          }catch{}
+          setCart(readCart(result.merchantId));setCartStoreReady(result.merchantId)
         }
-        if (result.merchantId) {setStoreMerchantId(result.merchantId);writeCart(result.merchantId,[])}
-        if (result.reference) setPaymentReference(result.reference)
-        if (supabase && result.orderToken) {
-          const [{ data: orderData }, { data: trackingData }] = await Promise.all([
-            supabase.rpc('get_public_order', { p_token: result.orderToken }).maybeSingle(),
-            supabase.rpc('get_public_order_tracking', { p_token: result.orderToken }).maybeSingle(),
-          ])
-          if (orderData) {
-            const paidOrder = { id: orderData.order_number, publicToken: result.orderToken, name: orderData.customer_name, phone: orderData.customer_phone, item: orderData.item_name, qty: orderData.quantity, unitPrice: Number(orderData.unit_price), deliveryFee: Number(orderData.delivery_fee), amount: Number(orderData.unit_price) * Number(orderData.quantity) + Number(orderData.delivery_fee), address: orderData.delivery_address, status: trackingData?.status || 'Payment received', createdAt: orderData.created_at, updatedAt: trackingData?.updated_at, paymentStatus: trackingData?.payment_status || 'paid' }
-            setSelected(paidOrder)
-            setDraft(current => ({ ...current, name: orderData.customer_name, phone: orderData.customer_phone, item: orderData.item_name, qty: orderData.quantity, price: String(orderData.unit_price), delivery: String(orderData.delivery_fee), address: orderData.delivery_address || '' }))
-            setMerchant(current => ({ ...current, business: orderData.merchant_business || current.business, phone: trackingData?.merchant_phone || current.phone }))
-          }
-        }
+        window.history.replaceState({},'',`/?track=${encodeURIComponent(result.orderToken)}`)
         setScreen('paid')
-      })
-      .catch(() => { setScreen('payment'); setNotice('Payment verification failed. Please try again.') })
-      .finally(() => {
-        setPaymentBusy(false)
-        window.history.replaceState({}, '', window.location.pathname)
-      })
-  }, [])
+      }catch(error){setNotice(error.message || 'We could not check your payment. Please try again.')}finally{setPaymentBusy(false);verificationLock.current=false}
+    }
+    verify()
+  }, [verificationAttempt])
 
   useEffect(() => {
     if (!supabase) return
@@ -361,11 +343,13 @@ export default function Home() {
       const isPublicFlow = params.has('order') || params.has('track') || params.has('reference') || params.has('store')
       if (isPublicFlow) return
       if (session.user.user_metadata?.account_type === 'buyer') { window.location.assign('/shop'); return }
-      const [{ data: profile }, { data: savedOrders }, { data: savedProducts }] = await Promise.all([
+      const [{ data: profile, error:profileError }, { data: savedOrders, error:ordersError }, { data: savedProducts, error:productsError }] = await Promise.all([
         supabase.from('profiles').select('full_name,business_name,phone,delivery_fee').eq('id', session.user.id).maybeSingle(),
-        supabase.from('orders').select('*').order('created_at', { ascending: false }),
-        supabase.from('products').select('*').order('created_at', { ascending: false }),
+        supabase.from('orders').select('*').eq('merchant_id',session.user.id).order('created_at', { ascending: false }),
+        supabase.from('products').select('*').eq('merchant_id',session.user.id).order('created_at', { ascending: false }),
       ])
+      if(profileError){setNotice('We could not load your business. Reload to try again.');setScreen('account-error');return}
+      if(ordersError || productsError)setAccountError('Some business details could not be loaded. Please reload before making changes.')
       const googleName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || ''
       if (profile) {
         setMerchant(current => ({ ...current, name: profile.full_name || googleName || 'Merchant', business: profile.business_name || 'My Store', phone: profile.phone || '', email: session.user.email || '', deliveryFee: Number(profile.delivery_fee || 0) }))
@@ -373,7 +357,7 @@ export default function Home() {
         setMerchant(current => ({ ...current, name: googleName || 'Merchant', email: session.user.email || '' }))
       }
       if (savedOrders) setOrders(savedOrders.map(order => ({
-        lineItems: order.line_items || [],
+        lineItems: order.line_items || [], note:order.buyer_note || '',
         paymentStatus: order.payment_status,
         updatedAt: order.updated_at,
         id: order.order_number,
@@ -397,12 +381,12 @@ export default function Home() {
         setScreen(profile?.business_name ? 'dashboard' : 'setup')
       }
     }
-    loadAccount()
+    loadAccount().catch(()=>{setNotice('We could not load your business. Please reload.');setScreen('account-error')})
   }, [session?.user?.id])
 
-  useEffect(() => {
-    localStorage.setItem('orderflow-state', JSON.stringify({ orders, merchant }))
-  }, [orders, merchant])
+  useEffect(()=>{
+    if(session?.user?.email)setDraft(current=>({...current,email:current.email || session.user.email}))
+  },[session?.user?.email])
 
   const total = useMemo(() => (['create','review'].includes(screen) ? itemTotal(newItems) : Number(draft.price || 0) * Number(draft.qty || 1)) + Number(draft.delivery || 0), [draft,newItems,screen])
   const orderStats = useMemo(() => ({
@@ -421,12 +405,12 @@ export default function Home() {
   const storeCategories = useMemo(() => ['All', ...new Set(products.filter(product => product.active !== false).map(product => product.category).filter(Boolean))], [products])
   const visibleProducts = useMemo(() => products.filter(product => product.active !== false && (storeCategory === 'All' || product.category === storeCategory) && (!storeSearch.trim() || [product.name, product.category, product.description].some(value => String(value || '').toLowerCase().includes(storeSearch.trim().toLowerCase())))), [products, storeSearch, storeCategory])
   const cartTotal = useMemo(() => cart.reduce((sum, entry) => sum + Number(entry.product.price) * entry.quantity, 0), [cart])
-  const go = (next) => { setStatusDraft(null); setScreen(next); setNotice(''); window.scrollTo(0, 0) }
+  const go = (next) => { setStatusDraft(null); setScreen(next); setNotice(''); window.scrollTo(0, 0); requestAnimationFrame(()=>document.querySelector('.phone>section')?.scrollTo(0,0)) }
   const field = (key, label, type = 'text', placeholder = '') => <label><span>{label}</span><input type={type} value={draft[key]} placeholder={placeholder} onChange={e => setDraft({ ...draft, [key]: e.target.value })} /></label>
   const authField = (key, label, type = 'text', placeholder = '') => <label><span>{label}</span><input type={type} value={auth[key]} placeholder={placeholder} onChange={e => setAuth({ ...auth, [key]: e.target.value })} /></label>
 
   const signUp = async () => {
-    if (!supabase) return go('setup')
+    if (!supabase) return setNotice('Sign-up is temporarily unavailable. Please try again shortly.')
     setAuthBusy(true)
     const { data, error } = await supabase.auth.signUp({ email: auth.email, password: auth.password, options: { data: { full_name: auth.name } } })
     setAuthBusy(false)
@@ -437,14 +421,14 @@ export default function Home() {
   }
 
   const signIn = async () => {
-    if (!supabase) return go('dashboard')
+    if (!supabase) return setNotice('Sign-in is temporarily unavailable. Please try again shortly.')
     setAuthBusy(true)
     const { error } = await supabase.auth.signInWithPassword({ email: auth.email, password: auth.password })
     setAuthBusy(false)
     if (error) return setNotice(error.message)
     if (rememberMe) localStorage.setItem('orderflow-remembered-email', auth.email)
     else localStorage.removeItem('orderflow-remembered-email')
-    go('dashboard')
+    setScreen('splash')
   }
 
   const signInWithGoogle = async () => {
@@ -463,14 +447,20 @@ export default function Home() {
   }
 
   const completeSetup = async () => {
+    if(!merchant.business.trim())return setNotice('Add your business name.')
+    if(!supabase || !session)return setNotice('Please sign in to save your business.')
     if (supabase && session) {
-      const { error } = await supabase.from('profiles').upsert({ id: session.user.id, full_name: merchant.name, business_name: merchant.business })
+      const { error } = await supabase.from('profiles').upsert({ id: session.user.id, full_name: merchant.name, business_name: merchant.business.trim(),phone:merchant.phone || '' })
       if (error) return setNotice(error.message)
     }
     go('dashboard')
   }
 
   const saveOrder = async () => {
+    if(!supabase || !session)return setNotice('Please sign in again to create your order.')
+    if(checkoutLock.current)return
+    checkoutLock.current=true;setCheckoutBusy(true)
+    try{
     if (supabase && session) {
       if (!validItems(newItems) || total <= 0) return setNotice('Check each item name, quantity and price.')
       const orderNumber = `OF-${crypto.randomUUID().slice(0,8).toUpperCase()}`
@@ -492,9 +482,11 @@ export default function Home() {
       setOrders(current => [savedOrder, ...current.filter(order => order.id !== savedOrder.id)])
     }
     go('link')
+    }catch(error){setNotice(error.message || 'Could not create the order. Please retry.')}finally{checkoutLock.current=false;setCheckoutBusy(false)}
   }
 
   const confirmBuyerOrder = async () => {
+    if(selected?.paymentStatus==='paid')return openTracking()
     if (supabase && selected?.publicToken) {
       const { data, error } = await supabase.rpc('confirm_public_order', { p_token: selected.publicToken })
       if (error) return setNotice('We could not confirm this order. Please try again.')
@@ -528,7 +520,7 @@ export default function Home() {
     if (error || !data) return setNotice('The latest status could not be loaded. Please try again.')
     setSelected(current => ({ ...current, status: data.status, updatedAt: data.updated_at, paymentStatus: data.payment_status }))
     setMerchant(current => ({ ...current, phone: data.merchant_phone || current.phone }))
-    setNotice('Order status refreshed')
+    setTrackingConnection('online')
   }
 
   const openTracking = () => {
@@ -536,7 +528,6 @@ export default function Home() {
       window.history.replaceState({}, '', `/?track=${encodeURIComponent(selected.publicToken)}`)
     }
     go('tracking')
-    setTimeout(refreshTracking, 0)
   }
 
   const contactSeller = () => {
@@ -561,8 +552,8 @@ export default function Home() {
   const openOrderEditor = () => {
     setEditingOrder({
       ...selected,
-      unitPrice: Number(selected.unitPrice ?? Math.max(Number(selected.amount || 0) - Number(selected.deliveryFee || 3500), 0) / Number(selected.qty || 1)),
-      deliveryFee: Number(selected.deliveryFee ?? 3500),
+      unitPrice: Number(selected.unitPrice ?? Math.max(Number(selected.amount || 0) - Number(selected.deliveryFee || 0), 0) / Number(selected.qty || 1)),
+      deliveryFee: Number(selected.deliveryFee ?? 0),
     })
     go('edit-order')
   }
@@ -605,6 +596,7 @@ export default function Home() {
   }
 
   const saveProduct = async () => {
+    if(!supabase || !session)return setNotice('Please sign in to save this product.')
     if (!productDraft.name.trim() || Number(productDraft.price) <= 0) return setNotice('Add a product name and valid price.')
     if (!Number.isInteger(Number(productDraft.stock_quantity)) || Number(productDraft.stock_quantity) < 0) return setNotice('Stock must be zero or a whole number.')
     setProductBusy(true)
@@ -629,9 +621,6 @@ export default function Home() {
         const { data, error } = await query.select().single()
         if (error) throw error
         setProducts(current => editingProduct ? current.map(item => item.id === data.id ? data : item) : [data, ...current])
-      } else {
-        const localProduct = { ...product, id: editingProduct?.id || crypto.randomUUID(), image_url: imageUrls[0] || seedProducts[0].image_url }
-        setProducts(current => editingProduct ? current.map(item => item.id === localProduct.id ? localProduct : item) : [localProduct, ...current])
       }
       setProductDraft(emptyProductDraft)
       setEditingProduct(null)
@@ -665,16 +654,12 @@ export default function Home() {
     setProducts(current => current.map(item => item.id === product.id ? { ...item, active: next } : item))
   }
 
-  const addToCart = (product) => {
-    setCart(current => {
-      const found = current.find(entry => entry.product.id === product.id)
-      const stock = Number(product.stock_quantity ?? 999999)
-      if (stock <= 0 || (found && found.quantity >= stock)) {
-        setNotice(stock <= 0 ? 'This product is out of stock.' : `Only ${stock} available.`)
-        return current
-      }
-      return found ? current.map(entry => entry.product.id === product.id ? { ...entry, quantity: entry.quantity + 1 } : entry) : [...current, { product, quantity: 1 }]
-    })
+  const addToCart = product => {
+    const found=cart.find(entry=>entry.product.id===product.id)
+    const stock=Number(product.stock_quantity || 0)
+    if((found?.quantity || 0)>=stock)return setNotice('You have added all the available stock.')
+    setCart(current=>found?current.map(entry=>entry.product.id===product.id?{product,quantity:entry.quantity+1}:entry):[...current,{product,quantity:1}])
+    setNotice(`${product.name} added to your cart.`)
   }
 
   const openProduct = (product) => {
@@ -693,51 +678,63 @@ export default function Home() {
   const removeFromCart = (productId) => setCart(current => current.filter(entry => entry.product.id !== productId))
 
   const createCartOrder = async () => {
-    if (!draft.name || !draft.email || !draft.address || cart.length === 0) return setNotice('Add your name, email and delivery address.')
-    const itemName = cart.map(entry => `${entry.product.name} × ${entry.quantity}`).join(', ')
-    const quantity = cart.reduce((sum, entry) => sum + entry.quantity, 0)
-    if (!supabase || !storeMerchantId) return setNotice('This storefront checkout requires a connected store.')
-    const orderNumber = `OF-${Date.now().toString().slice(-6)}`
-    const cartPayload = cart.map(entry => ({ product_id: entry.product.id, quantity: entry.quantity }))
-    const { data, error } = await supabase.rpc('create_store_order', { p_merchant: storeMerchantId, p_order_number: orderNumber, p_customer_name: draft.name, p_customer_phone: draft.phone || '', p_cart: cartPayload, p_delivery_address: draft.address }).maybeSingle()
-    if (error || !data) return setNotice(error?.message || 'The order could not be created.')
-    const secureTotal = Number(data.total)
-    const deliveryFee = Number(merchant.deliveryFee || 0)
-    const secureSubtotal = Math.max(0, secureTotal - deliveryFee)
-    const order = { id: orderNumber, publicToken: data.public_token, name: draft.name, phone: draft.phone, item: itemName, qty: 1, unitPrice: secureSubtotal, deliveryFee, amount: secureTotal, address: draft.address, status: 'Confirmed', createdAt: new Date().toISOString() }
-    setSelected(order)
-    setDraft(current => ({ ...current, item: itemName, qty: 1, price: String(secureSubtotal), delivery: String(deliveryFee) }))
-    go('payment')
+    if(checkoutLock.current)return
+    if(!draft.name.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email) || !draft.address.trim() || !cart.length)return setNotice('Add your name, a valid email and delivery address.')
+    if(!supabase || !storeMerchantId)return setNotice('This store could not connect. Please try again.')
+    checkoutLock.current=true;setCheckoutBusy(true);setNotice('')
+    try{
+      const cartPayload=cart.map(entry=>({product_id:entry.product.id,quantity:entry.quantity}))
+      const fingerprint=JSON.stringify(cartPayload.slice().sort((a,b)=>a.product_id.localeCompare(b.product_id)))
+      const key=`orderflow-checkout:${storeMerchantId}`
+      let pending
+      try{pending=JSON.parse(sessionStorage.getItem(key) || 'null')}catch{}
+      if(!pending || pending.fingerprint!==fingerprint)pending={fingerprint,id:crypto.randomUUID()}
+      sessionStorage.setItem(key,JSON.stringify(pending))
+      const {data,error}=await supabase.rpc('create_store_checkout',{p_merchant:storeMerchantId,p_request_id:pending.id,p_name:draft.name,p_phone:draft.phone || '',p_email:draft.email,p_address:draft.address,p_cart:cartPayload,p_note:draft.note || ''}).maybeSingle()
+      if(error || !data)throw Error(error?.message || 'Your order could not be created. Please try again.')
+      sessionStorage.setItem(key,JSON.stringify({...pending,publicToken:data.public_token}))
+      const {error:deliveryError}=await supabase.rpc('update_public_order_delivery',{p_token:data.public_token,p_name:draft.name,p_phone:draft.phone || '',p_email:draft.email,p_address:draft.address,p_note:draft.note || ''})
+      if(deliveryError)throw deliveryError
+      const {data:lines,error:linesError}=await supabase.rpc('get_public_order_lines',{p_token:data.public_token})
+      if(linesError || !Array.isArray(lines) || !lines.length)throw Error('Your order is saved. Please try again to load its details.')
+      const delivery=Number(data.delivery_fee),subtotal=Number(data.total)-delivery
+      const order={id:data.order_number,publicToken:data.public_token,name:draft.name,phone:draft.phone,item:lines.map(row=>`${row.name} × ${row.quantity}`).join(', '),qty:1,unitPrice:subtotal,deliveryFee:delivery,amount:Number(data.total),address:draft.address,note:draft.note,channel:'Storefront',status:'Confirmed',createdAt:new Date().toISOString(),lineItems:lines}
+      setSelected(order);setDraft(current=>({...current,item:order.item,qty:1,price:String(subtotal),delivery:String(delivery)}));go('payment')
+    }catch(error){setNotice(error.message || 'Checkout could not connect. Your cart is saved; please try again.')}finally{checkoutLock.current=false;setCheckoutBusy(false)}
+  }
+
+  const saveDelivery = async () => {
+    if(checkoutLock.current || !supabase || !selected?.publicToken)return
+    checkoutLock.current=true;setCheckoutBusy(true);setNotice('')
+    try{
+      const {error}=await supabase.rpc('update_public_order_delivery',{p_token:selected.publicToken,p_name:draft.name,p_phone:draft.phone || '',p_email:draft.email,p_address:draft.address,p_note:draft.note || ''})
+      if(error)throw error
+      setSelected(current=>({...current,name:draft.name,phone:draft.phone,address:draft.address,note:draft.note}));go('payment')
+    }catch(error){setNotice(error.message || 'Could not save delivery details. Please retry.')}finally{checkoutLock.current=false;setCheckoutBusy(false)}
   }
 
   const shareStore = async () => {
-    const url = `${window.location.origin}/?store=${encodeURIComponent(session?.user?.id || '')}`
-    if (navigator.share) return navigator.share({ title: `${merchant.business} catalogue`, text: `Shop from ${merchant.business} on OrderFlow`, url })
-    await navigator.clipboard.writeText(url)
-    setNotice('Store link copied')
+    if(!session?.user?.id)return
+    const url=`${window.location.origin}/?store=${encodeURIComponent(session.user.id)}`
+    try{
+      if(navigator.share)await navigator.share({title:`${merchant.business} catalogue`,url})
+      else{await navigator.clipboard.writeText(url);setNotice('Store link copied')}
+    }catch(error){if(error.name!=='AbortError')setNotice('Could not share. Open your storefront and copy its address.')}
   }
 
-  const openStorefront = async () => {
-    if (!supabase || !storeMerchantId) return go('welcome')
-    setScreen('public-loading')
-    const { data, error } = await supabase.rpc('get_public_store', { p_merchant: storeMerchantId }).maybeSingle()
-    if (error || !data) {
-      setNotice('The seller storefront could not be opened.')
-      return setScreen('public-error')
-    }
-    setMerchant(current => ({ ...current, business: data.business_name || current.business, phone: data.phone || current.phone, deliveryFee: Number(data.delivery_fee || 0) }))
-    setProducts(Array.isArray(data.products) ? data.products : [])
-    setCart([])
-    go('store')
-  }
+  const openStorefront = () => window.location.assign(storeMerchantId ? `/?store=${encodeURIComponent(storeMerchantId)}` : '/shop')
 
   const signOut = async () => {
-    if (supabase) await supabase.auth.signOut()
+    if (supabase) {const {error}=await supabase.auth.signOut();if(error)return setNotice('Could not sign out. Please try again.')}
+    setOrders([]);setProducts([]);setSelected(null);setMerchant({name:'',business:'',phone:'',email:'',deliveryFee:0})
     setSession(null)
     go('welcome')
   }
 
   const startPayment = async () => {
+    if(paymentBusy)return
+    if(!selected?.publicToken)return setNotice('Open a valid order before paying.')
+    if(selected.paymentStatus==='paid')return openTracking()
     if (paymentMethod === 'opay') return setNotice('OPay setup requires approved merchant API credentials. Choose Paystack or Bank transfer for this test payment.')
     if (paymentMethod === 'escrow') {
   if (!selected?.publicToken) {
@@ -758,7 +755,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: draft.email || auth.email || session?.user?.email || merchant.email,
-          orderId: selected?.id || 'OF-1025',
+          orderId: selected.id,
           orderToken: selected?.publicToken,
           paymentMethod,
         }),
@@ -776,6 +773,14 @@ export default function Home() {
     }
   }
 
+  if (screen === 'account-error') return <AppShell onBack={go}><section className="ux-payment-success"><h1>We couldn’t open your workspace</h1><p role="alert">{notice}</p><button onClick={()=>window.location.reload()}>Try again</button><button className="secondary" onClick={signOut}>Sign out</button></section></AppShell>
+
+  if (screen === 'payment-check') return <AppShell onBack={go} title="Payment status"><section className="ux-payment-success">
+    <span className="ux-success-icon"><Icon name="clock"/></span><h1>{paymentBusy?'Checking your payment…':'Let’s confirm your payment'}</h1><p>{paymentBusy?'We’re waiting for the payment confirmation.': 'If you have already paid, check the status again before starting another payment.'}</p>
+    {notice&&<p className="notice" role="status">{notice}</p>}<button disabled={paymentBusy} className="ux-primary" onClick={()=>setVerificationAttempt(n=>n+1)}>{paymentBusy?'Checking…':'Check payment status'}</button>
+    {new URLSearchParams(typeof window!=='undefined'?window.location.search:'').get('order')&&<a className="ux-secondary" href={`/?track=${encodeURIComponent(new URLSearchParams(window.location.search).get('order'))}`}>Open order tracking</a>}<p className="ux-muted ux-order-id">Reference: {paymentReference}</p>
+  </section></AppShell>
+
   if (screen === 'splash') return <main className="splash"><OrderFlowLogo /><p>Orders made simple.</p><div className="splash-pulse" /></main>
 
   if (screen === 'public-loading') return <main className="splash"><OrderFlowLogo /><p>{publicOrderLoading ? 'Opening your secure order…' : 'Loading order…'}</p><div className="splash-pulse" /></main>
@@ -787,62 +792,96 @@ export default function Home() {
 
   if (screen === 'signup') return <AppShell onBack={go} back="welcome" title="Create your account"><section className="form auth-form"><div className="auth-intro"><a className="buyer-role-link" href="/buyer?mode=signup">Shopping? Create a buyer account →</a><h1>Let’s get you started</h1><p>Set up your store and start turning conversations into paid orders.</p></div><button className="social google-button" onClick={signInWithGoogle}><GoogleIcon /><span>Continue with Google</span></button><div className="or"><span>or create an account with email</span></div>{authField('name','Full name','text','Your full name')}{authField('email','Email address','email','you@business.com')}{authField('password','Password','password','At least 8 characters')}{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.name || !auth.email || auth.password.length < 8} onClick={signUp}>{authBusy ? 'Creating account…' : 'Continue'}</button><div className="auth-soft-design"><span>Simple setup</span><span>Secure payments</span><span>Live tracking</span></div><p className="center auth-switch">Already have an account? <a onClick={() => go('signin')}>Sign in</a></p></section></AppShell>
 
-  if (screen === 'signin') return <AppShell onBack={go} back="welcome"><section className="form auth-form"><div className="auth-logo"><OrderFlowLogo compact /></div><div className="auth-intro"><a className="buyer-role-link" href="/buyer">Shopping? Sign in as a buyer →</a><h1>Welcome back</h1><p>Sign in to manage orders, buyers and payments.</p></div><button className="social google-button" onClick={signInWithGoogle}><GoogleIcon /><span>Continue with Google</span></button><div className="or"><span>or continue with email</span></div>{authField('email','Email address','email','you@business.com')}<label><span>Password</span><div className="password-field"><input type={showPassword ? 'text' : 'password'} value={auth.password} placeholder="Your password" onChange={event => setAuth({ ...auth, password: event.target.value })}/><button type="button" className="password-toggle" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button></div></label><div className="signin-options"><label className="remember"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)}/><span>Remember me</span></label><button type="button" className="text-button" onClick={resetPassword}>Forgot password?</button></div>{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.email || !auth.password} onClick={signIn}>{authBusy ? 'Signing in…' : 'Sign in'}</button><div className="auth-soft-design"><span>Your orders</span><span>Your buyers</span><span>One clear view</span></div><p className="center auth-switch">New to OrderFlow? <a onClick={() => go('signup')}>Create an account</a></p>{!isSupabaseConfigured && <small className="center">Demo mode is active until Supabase is connected.</small>}</section></AppShell>
+  if (screen === 'signin') return <AppShell onBack={go} back="welcome"><section className="form auth-form"><div className="auth-logo"><OrderFlowLogo compact /></div><div className="auth-intro"><a className="buyer-role-link" href="/buyer">Shopping? Sign in as a buyer →</a><h1>Welcome back</h1><p>Sign in to manage orders, buyers and payments.</p></div><button className="social google-button" onClick={signInWithGoogle}><GoogleIcon /><span>Continue with Google</span></button><div className="or"><span>or continue with email</span></div>{authField('email','Email address','email','you@business.com')}<label><span>Password</span><div className="password-field"><input type={showPassword ? 'text' : 'password'} value={auth.password} placeholder="Your password" onChange={event => setAuth({ ...auth, password: event.target.value })}/><button type="button" className="password-toggle" onClick={() => setShowPassword(value => !value)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? 'Hide' : 'Show'}</button></div></label><div className="signin-options"><label className="remember"><input type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)}/><span>Remember me</span></label><button type="button" className="text-button" onClick={resetPassword}>Forgot password?</button></div>{notice && <div className="notice">{notice}</div>}<button disabled={authBusy || !auth.email || !auth.password} onClick={signIn}>{authBusy ? 'Signing in…' : 'Sign in'}</button><div className="auth-soft-design"><span>Your orders</span><span>Your buyers</span><span>One clear view</span></div><p className="center auth-switch">New to OrderFlow? <a onClick={() => go('signup')}>Create an account</a></p></section></AppShell>
 
-  if (screen === 'setup') return <AppShell onBack={go} back="signup" title="Set up your business"><section className="form"><h1>Make OrderFlow yours</h1><label><span>Business name</span><input value={merchant.business} onChange={e => setMerchant({ ...merchant, business: e.target.value })} /></label><label><span>What do you sell?</span><select><option>Fashion and accessories</option><option>Beauty and personal care</option><option>Food and drinks</option><option>Services</option></select></label><label><span>WhatsApp business number</span><input placeholder="0801 234 5678" /></label>{notice && <div className="notice">{notice}</div>}<button onClick={completeSetup}>Complete setup</button></section></AppShell>
+  if (screen === 'setup') return <AppShell onBack={go} back="signup" title="Set up your business"><section className="form"><h1>Make OrderFlow yours</h1><label><span>Business name</span><input value={merchant.business} onChange={e => setMerchant({ ...merchant, business: e.target.value })} /></label><label><span>WhatsApp business number</span><input type="tel" value={merchant.phone} onChange={e=>setMerchant({...merchant,phone:e.target.value})} placeholder="0801 234 5678" /></label>{notice && <div className="notice">{notice}</div>}<button onClick={completeSetup}>Complete setup</button></section></AppShell>
 
-  if (screen === 'dashboard') return <AppShell onBack={go} merchantHeader merchantName={merchant.name} onNotifications={() => setNotificationsOpen(value => !value)} onProfile={() => go('profile')}><section className="dashboard"><div className="dash-head"><div><p>Good afternoon, {merchant.name}</p><h1>Orders</h1></div></div>{notificationsOpen && <aside className="notification-panel"><div><strong>Notifications</strong><button onClick={() => setNotificationsOpen(false)} aria-label="Close notifications">×</button></div>{orders.length===0?<p>No order activity yet.</p>:orders.slice().sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt)).slice(0,8).map(order=><p key={order.id}><b>{order.status}</b><span>{order.id} · {order.name}</span><small>{orderDate.format(new Date(order.updatedAt||order.createdAt))}</small></p>)}</aside>}<CommerceBanner /><button className="create-order-button" onClick={() => go('create')}>+ Create new order</button><div className="stats"><div><span>Awaiting</span><b>{orderStats.awaiting}</b></div><div><span>Active</span><b>{orderStats.active}</b></div><div><span>Issues</span><b>{orderStats.issues}</b></div></div><div className="dashboard-workspace"><div className="recent-orders-panel"><div className="section-title"><h2>Recent orders</h2><button className="section-link" onClick={() => go('orders')}>View all</button></div><div className="orders">{orders.slice(0,5).map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.lineItems?.length ? order.lineItems.reduce((sum,i)=>sum+Number(i.quantity),0) : order.qty} item(s) · {naira.format(order.amount)}</span><small>{order.channel} · {orderDate.format(new Date(order.createdAt || Date.now()))}</small></div><em className={order.status.toLowerCase().replaceAll(' ','-')}>{order.status}</em></button>)}{orders.length === 0 && <div className="empty-state"><strong>No orders yet</strong><span>Create your first order to see it here.</span></div>}</div></div><aside className="dashboard-support"><div className="section-title"><h2>Quick actions</h2></div><button className="quick-action" onClick={() => go('create')}><NavIcon type="orders"/><span><b>Create new order</b><small>Prepare a secure buyer link</small></span></button><button className="quick-action" onClick={() => go('profile')}><NavIcon type="profile"/><span><b>Business profile</b><small>Review your store details</small></span></button><div className="activity-note"><span>Today</span><strong>{orderStats.active} active order{orderStats.active === 1 ? '' : 's'}</strong><small>Keep buyers informed as orders progress.</small></div></aside></div></section><MerchantNav active="dashboard" onNavigate={go}/></AppShell>
+  if (screen === 'dashboard') return <AppShell onBack={go} merchantHeader merchantName={merchant.name} onNotifications={() => go('orders')} onProfile={() => go('profile')}>
+    <VendorOverview merchant={{...merchant,id:session?.user?.id}} orders={orders} products={products} onNavigate={go} onOrder={order=>{setSelected(order);go('merchant-order')}} onEditProduct={editProduct} onShare={shareStore} notice={notice || accountError}/>
+    <MerchantNav active="dashboard" onNavigate={go}/>
+  </AppShell>
 
-  if (screen === 'products') return <AppShell onBack={go} back="dashboard" title="Products"><section className="dashboard products-screen"><div className="catalogue-head"><div><h1>Your catalogue</h1><p>Manage what buyers see, pricing and available stock.</p></div><button onClick={() => { setEditingProduct(null); setProductDraft(emptyProductDraft); go('add-product') }}>+ Add product</button></div><div className="store-share-card"><span><b>Your public store</b><small>Share one link for buyers to browse and checkout.</small></span><button className="secondary" onClick={shareStore}>Copy or share link</button></div>{notice && <div className="notice">{notice}</div>}<div className="merchant-product-grid">{products.map(product => <article className={`merchant-product-card${product.active === false ? ' unavailable' : ''}`} key={product.id}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}>{Number(product.stock_quantity ?? 1) === 0 && <span className="stock-badge sold-out">Out of stock</span>}{product.active === false && <span className="stock-badge hidden">Hidden</span>}</div><div><small>{product.category}</small><h3>{product.name}</h3><strong>{naira.format(product.price)}</strong><span className="stock-line">{Number(product.stock_quantity ?? 0)} in stock</span><div className="product-actions"><button className="secondary" onClick={() => editProduct(product)}>Edit</button><button className="secondary" onClick={() => toggleProduct(product)}>{product.active === false ? 'Show' : 'Hide'}</button><button className="danger-link" onClick={() => deleteProduct(product)}>Delete</button></div></div></article>)}</div></section><MerchantNav active="products" onNavigate={go}/></AppShell>
+
+  if (screen === 'products') return <AppShell onBack={go} back="dashboard" title="Products"><section className="dashboard products-screen"><div className="catalogue-head"><div><h1>Your catalogue</h1><p>Manage what buyers see, pricing and available stock.</p></div><button onClick={() => { setEditingProduct(null); setProductDraft(emptyProductDraft); go('add-product') }}>+ Add product</button></div><div className="store-share-card"><span><b>Your public store</b><small>Share one link for buyers to browse and checkout.</small></span><button className="secondary" onClick={shareStore}>Copy or share link</button></div>{notice && <div className="notice">{notice}</div>}<div className="merchant-product-grid">{products.map(product => <article className={`merchant-product-card${product.active === false ? ' unavailable' : ''}`} key={product.id}><div className="product-image"><ProductPhoto product={product}/>{Number(product.stock_quantity ?? 1) === 0 && <span className="stock-badge sold-out">Out of stock</span>}{product.active === false && <span className="stock-badge hidden">Hidden</span>}</div><div><small>{product.category}</small><h3>{product.name}</h3><strong>{naira.format(product.price)}</strong><span className="stock-line">{Number(product.stock_quantity ?? 0)} in stock</span><div className="product-actions"><button className="secondary" onClick={() => editProduct(product)}>Edit</button><button className="secondary" onClick={() => toggleProduct(product)}>{product.active === false ? 'Show' : 'Hide'}</button><button className="danger-link" onClick={() => deleteProduct(product)}>Delete</button></div></div></article>)}</div></section><MerchantNav active="products" onNavigate={go}/></AppShell>
 
   if (screen === 'add-product') return <AppShell onBack={go} back="products" title={editingProduct ? 'Edit product' : 'Add product'}><section className="form product-form"><h1>{editingProduct ? 'Update product' : 'Add to your catalogue'}</h1><p>Use clear details and up to four photos buyers can trust.</p><label><span>Product photos</span><input type="file" accept="image/*" multiple onChange={event => setProductDraft({ ...productDraft, images: Array.from(event.target.files || []).slice(0, 4) })}/><small>{productDraft.existingImages.length ? `${productDraft.existingImages.length} saved photo${productDraft.existingImages.length > 1 ? 's' : ''}. New photos will be added.` : 'Choose up to four images.'}</small></label><label><span>Product name</span><input value={productDraft.name} placeholder="e.g. Classic handbag" onChange={event => setProductDraft({ ...productDraft, name: event.target.value })}/></label><label><span>Short description</span><input value={productDraft.description} placeholder="What should the buyer know?" onChange={event => setProductDraft({ ...productDraft, description: event.target.value })}/></label><div className="two"><label><span>Price</span><input type="number" min="0" value={productDraft.price} placeholder="₦ 0" onChange={event => setProductDraft({ ...productDraft, price: event.target.value })}/></label><label><span>Stock quantity</span><input type="number" min="0" step="1" value={productDraft.stock_quantity} placeholder="0" onChange={event => setProductDraft({ ...productDraft, stock_quantity: event.target.value })}/></label></div><label><span>Category</span><select value={productDraft.category} onChange={event => setProductDraft({ ...productDraft, category: event.target.value })}><option>Fashion</option><option>Beauty</option><option>Food & drinks</option><option>Electronics</option><option>Home & living</option><option>Health</option><option>Services</option><option>Other</option></select></label>{notice && <div className="notice">{notice}</div>}<button disabled={productBusy} onClick={saveProduct}>{productBusy ? 'Saving product…' : editingProduct ? 'Save changes' : 'Add product'}</button></section><MerchantNav active="products" onNavigate={go}/></AppShell>
 
-  if (screen === 'store') return <AppShell onBack={go}><section className="storefront"><div className="store-hero"><div className="store-identity"><div className="avatar store-avatar">{merchant.business.slice(0,2).toUpperCase()}</div><div><small>Welcome to</small><h1>{merchant.business}</h1><p>Good products, secure checkout and order updates you can follow.</p></div></div><div className="store-trust"><span>Secure payment</span><span>Track your order</span><span>Seller support</span></div></div><StoreAccount session={session} store={storeMerchantId} business={merchant.business} cart={cart} onCart={()=>go('cart')} onSignOut={async()=>{const {error}=await supabase.auth.signOut();if(error){setNotice(error.message);return}setSession(null)}}/><input className="search store-search" type="search" value={storeSearch} onChange={event => setStoreSearch(event.target.value)} placeholder="What are you looking for?"/><div className="category-row" aria-label="Product categories">{storeCategories.map(category => <button key={category} className={storeCategory === category ? 'active' : ''} onClick={() => setStoreCategory(category)}>{category}</button>)}</div>{notice && <div className="notice">{notice}</div>}<div className="store-section-heading"><div><small>Shop the catalogue</small><h2>{storeCategory === 'All' ? 'Available products' : storeCategory}</h2></div><span>{visibleProducts.length} item{visibleProducts.length === 1 ? '' : 's'}</span></div><div className="store-product-grid">{visibleProducts.map(product => { const soldOut = Number(product.stock_quantity ?? 1) === 0; return <article className={`store-product-card${soldOut ? ' unavailable' : ''}`} key={product.id}><button className="product-open" onClick={() => openProduct(product)} aria-label={`View ${product.name}`}><div className="product-image" style={{ backgroundImage: `url(${product.image_url || seedProducts[0].image_url})` }}>{soldOut && <span className="stock-badge sold-out">Out of stock</span>}</div></button><small>{product.category}</small><button className="product-name" onClick={() => openProduct(product)}>{product.name}</button><p>{product.description}</p><div><span><strong>{naira.format(product.price)}</strong>{!soldOut && Number(product.stock_quantity) <= 5 && <small>Only {product.stock_quantity} left</small>}</span><button disabled={soldOut} onClick={() => addToCart(product)} aria-label={`Add ${product.name} to cart`}>{soldOut ? '×' : '+'}</button></div></article>})}{visibleProducts.length === 0 && <div className="empty-state"><strong>No products here yet</strong><span>Try another category or search.</span></div>}</div>{merchant.phone && <a className="seller-help" href={`https://wa.me/${merchant.phone.replace(/\D/g, '').replace(/^0/, '234')}`} target="_blank" rel="noreferrer">Need help choosing? Chat with {merchant.business}</a>}{cart.length > 0 && <button className="floating-cart" onClick={() => go('cart')}><span>View cart · {cart.reduce((sum, entry) => sum + entry.quantity, 0)} item{cart.reduce((sum, entry) => sum + entry.quantity, 0) === 1 ? '' : 's'}</span><b>{naira.format(cartTotal)}</b></button>}</section></AppShell>
+  if (screen === 'store') return <AppShell onBack={go}><section className="storefront"><a className="ux-back-link" href="/shop"><Icon name="back"/>Explore all stores</a><div className="store-hero"><div className="store-identity"><div className="avatar store-avatar">{merchant.business.slice(0,2).toUpperCase()}</div><div><small>Welcome to</small><h1>{merchant.business}</h1><p>Good products, secure checkout and order updates you can follow.</p></div></div><div className="store-trust"><span>Secure payment</span><span>Track your order</span><span>Seller support</span></div></div><StoreAccount session={session} store={storeMerchantId} business={merchant.business} cart={cart} onCart={()=>go('cart')} onSignOut={async()=>{const {error}=await supabase.auth.signOut();if(error){setNotice(error.message);return}setSession(null)}}/><input aria-label="Search this store" className="search store-search" type="search" value={storeSearch} onChange={event => setStoreSearch(event.target.value)} placeholder="What are you looking for?"/><div className="category-row" aria-label="Product categories">{storeCategories.map(category => <button key={category} className={storeCategory === category ? 'active' : ''} onClick={() => setStoreCategory(category)}>{category}</button>)}</div>{notice && <div className="notice">{notice}</div>}<div className="store-section-heading"><div><small>Shop the catalogue</small><h2>{storeCategory === 'All' ? 'Available products' : storeCategory}</h2></div><span>{visibleProducts.length} item{visibleProducts.length === 1 ? '' : 's'}</span></div><div className="store-product-grid">{visibleProducts.map(product => { const soldOut = Number(product.stock_quantity ?? 1) === 0; return <article className={`store-product-card${soldOut ? ' unavailable' : ''}`} key={product.id}><button className="product-open" onClick={() => openProduct(product)} aria-label={`View ${product.name}`}><div className="product-image"><ProductPhoto product={product}/>{soldOut && <span className="stock-badge sold-out">Out of stock</span>}</div></button><small>{product.category}</small><button className="product-name" onClick={() => openProduct(product)}>{product.name}</button><p>{product.description}</p><div><span><strong>{naira.format(product.price)}</strong>{!soldOut && Number(product.stock_quantity) <= 5 && <small>Only {product.stock_quantity} left</small>}</span><button disabled={soldOut} onClick={() => addToCart(product)} aria-label={`Add ${product.name} to cart`}>{soldOut ? '×' : '+'}</button></div></article>})}{visibleProducts.length === 0 && <div className="empty-state"><strong>No products here yet</strong><span>Try another category or search.</span></div>}</div>{merchant.phone && <a className="seller-help" href={`https://wa.me/${merchant.phone.replace(/\D/g, '').replace(/^0/, '234')}`} target="_blank" rel="noreferrer">Need help choosing? Chat with {merchant.business}</a>}{cart.length > 0 && <button className="floating-cart" onClick={() => go('cart')}><span>View cart · {cart.reduce((sum, entry) => sum + entry.quantity, 0)} item{cart.reduce((sum, entry) => sum + entry.quantity, 0) === 1 ? '' : 's'}</span><b>{naira.format(cartTotal)}</b></button>}</section><BuyerNav active="shop" count={cart.reduce((n,row)=>n+row.quantity,0)}/></AppShell>
 
-  if (screen === 'product-details' && selectedProduct) { const images = selectedProduct.images?.length ? selectedProduct.images : [selectedProduct.image_url || seedProducts[0].image_url]; const soldOut = Number(selectedProduct.stock_quantity ?? 1) === 0; return <AppShell onBack={go} back="store" title="Product details"><section className="product-detail"><div className="detail-image" style={{ backgroundImage: `url(${images[productImageIndex] || images[0]})` }}>{soldOut && <span className="stock-badge sold-out">Out of stock</span>}</div>{images.length > 1 && <div className="image-thumbnails">{images.map((image, index) => <button key={image} className={productImageIndex === index ? 'active' : ''} onClick={() => setProductImageIndex(index)} style={{ backgroundImage: `url(${image})` }} aria-label={`View image ${index + 1}`}/>)}</div>}<div className="detail-copy"><small>{selectedProduct.category}</small><h1>{selectedProduct.name}</h1><strong>{naira.format(selectedProduct.price)}</strong><p>{selectedProduct.description || 'Contact the seller if you would like more information about this product.'}</p><div className={`availability${soldOut ? ' sold-out' : ''}`}><span>{soldOut ? 'Out of stock' : 'Available now'}</span>{!soldOut && <small>{selectedProduct.stock_quantity} in stock</small>}</div></div>{notice && <div className="notice">{notice}</div>}<div className="detail-actions"><button className="secondary" onClick={() => go('store')}>Keep shopping</button><button disabled={soldOut} onClick={() => addToCart(selectedProduct)}>{soldOut ? 'Currently unavailable' : 'Add to cart'}</button></div>{cart.length > 0 && <button className="link" onClick={() => go('cart')}>View your cart · {naira.format(cartTotal)}</button>}<div className="buyer-assurance"><span><b>Secure checkout</b><small>Payment is processed safely.</small></span><span><b>Order tracking</b><small>Follow every delivery update.</small></span></div></section></AppShell> }
+  if (screen === 'product-details' && selectedProduct) { const images = selectedProduct.images?.length ? selectedProduct.images : [selectedProduct.image_url || '']; const soldOut = Number(selectedProduct.stock_quantity ?? 1) === 0; return <AppShell onBack={go} back="store" title="Product details"><section className="product-detail"><div className="detail-image" style={{ backgroundImage: `url(${images[productImageIndex] || images[0]})` }}>{soldOut && <span className="stock-badge sold-out">Out of stock</span>}</div>{images.length > 1 && <div className="image-thumbnails">{images.map((image, index) => <button key={image} className={productImageIndex === index ? 'active' : ''} onClick={() => setProductImageIndex(index)} style={{ backgroundImage: `url(${image})` }} aria-label={`View image ${index + 1}`}/>)}</div>}<div className="detail-copy"><small>{selectedProduct.category}</small><h1>{selectedProduct.name}</h1><strong>{naira.format(selectedProduct.price)}</strong><p>{selectedProduct.description || 'Contact the seller if you would like more information about this product.'}</p><div className={`availability${soldOut ? ' sold-out' : ''}`}><span>{soldOut ? 'Out of stock' : 'Available now'}</span>{!soldOut && <small>{selectedProduct.stock_quantity} in stock</small>}</div></div>{notice && <div className="notice">{notice}</div>}<div className="detail-actions"><button className="secondary" onClick={() => go('store')}>Keep shopping</button><button disabled={soldOut} onClick={() => addToCart(selectedProduct)}>{soldOut ? 'Currently unavailable' : 'Add to cart'}</button></div>{cart.length > 0 && <button className="link" onClick={() => go('cart')}>View your cart · {naira.format(cartTotal)}</button>}<div className="buyer-assurance"><span><b>Secure checkout</b><small>Payment is processed safely.</small></span><span><b>Order tracking</b><small>Follow every delivery update.</small></span></div></section></AppShell> }
 
-  if (screen === 'cart') return <AppShell onBack={go} back="store" title="Your cart"><section className="form cart-screen"><div className="section-title"><div><small>Review your order</small><h1>Your cart</h1></div><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)} item{cart.reduce((sum, entry) => sum + entry.quantity, 0) === 1 ? '' : 's'}</span></div>{cart.length === 0 ? <div className="empty-cart"><NavIcon type="products"/><h2>Your cart is empty</h2><p>Browse the catalogue and add something you like.</p><button onClick={() => go('store')}>Continue shopping</button></div> : <>{cart.map(entry => <article className="cart-item refined" key={entry.product.id}><button className="cart-product-image product-image" onClick={() => openProduct(entry.product)} style={{ backgroundImage: `url(${entry.product.image_url || seedProducts[0].image_url})` }} aria-label={`View ${entry.product.name}`}/><div className="cart-item-copy"><small>{entry.product.category}</small><h3>{entry.product.name}</h3><strong>{naira.format(Number(entry.product.price) * entry.quantity)}</strong><div className="cart-item-controls"><div className="quantity-control"><button onClick={() => changeCartQuantity(entry.product.id, -1)} aria-label="Reduce quantity">−</button><span>{entry.quantity}</span><button disabled={entry.quantity >= Number(entry.product.stock_quantity ?? 999999)} onClick={() => changeCartQuantity(entry.product.id, 1)} aria-label="Increase quantity">+</button></div><button className="remove-item" onClick={() => removeFromCart(entry.product.id)}>Remove</button></div></div></article>)}<div className="checkout-summary"><h2>Order summary</h2><p><span>Subtotal</span><b>{naira.format(cartTotal)}</b></p><p><span>Delivery fee</span><b>{Number(merchant.deliveryFee || 0) > 0 ? naira.format(merchant.deliveryFee) : 'Free'}</b></p><p className="checkout-total"><span>Total</span><b>{naira.format(cartTotal + Number(merchant.deliveryFee || 0))}</b></p><small>Delivery fee is set by {merchant.business}.</small></div><button onClick={() => go('store-delivery')}>Continue to delivery</button><button className="link" onClick={() => go('store')}>Add more items</button></>}</section></AppShell>
+  if (screen === 'cart') return <AppShell onBack={go} back="store" title="Your cart"><section className="form cart-screen"><div className="section-title"><div><small>Review your order</small><h1>Your cart</h1></div><span>{cart.reduce((sum, entry) => sum + entry.quantity, 0)} item{cart.reduce((sum, entry) => sum + entry.quantity, 0) === 1 ? '' : 's'}</span></div>{cart.length === 0 ? <div className="empty-cart"><NavIcon type="products"/><h2>Your cart is empty</h2><p>Browse the catalogue and add something you like.</p><button onClick={() => go('store')}>Continue shopping</button></div> : <>{cart.map(entry => <article className="cart-item refined" key={entry.product.id}><button className="cart-product-image product-image" onClick={() => openProduct(entry.product)} style={{ backgroundImage: `url(${entry.product.image_url || ''})` }} aria-label={`View ${entry.product.name}`}/><div className="cart-item-copy"><small>{entry.product.category}</small><h3>{entry.product.name}</h3><strong>{naira.format(Number(entry.product.price) * entry.quantity)}</strong><div className="cart-item-controls"><div className="quantity-control"><button onClick={() => changeCartQuantity(entry.product.id, -1)} aria-label="Reduce quantity">−</button><span>{entry.quantity}</span><button disabled={entry.quantity >= Number(entry.product.stock_quantity ?? 999999)} onClick={() => changeCartQuantity(entry.product.id, 1)} aria-label="Increase quantity">+</button></div><button className="remove-item" onClick={() => removeFromCart(entry.product.id)}>Remove</button></div></div></article>)}<div className="checkout-summary"><h2>Order summary</h2><p><span>Subtotal</span><b>{naira.format(cartTotal)}</b></p><p><span>Delivery fee</span><b>{Number(merchant.deliveryFee || 0) > 0 ? naira.format(merchant.deliveryFee) : 'Free'}</b></p><p className="checkout-total"><span>Total</span><b>{naira.format(cartTotal + Number(merchant.deliveryFee || 0))}</b></p><small>Delivery fee is set by {merchant.business}.</small></div><button onClick={() => go('store-delivery')}>Continue to delivery</button><button className="link" onClick={() => go('store')}>Add more items</button></>}</section></AppShell>
 
-  if (screen === 'store-delivery') return <AppShell onBack={go} back="cart" title="Delivery details"><section className="form store-delivery"><div className="checkout-intro"><small>Almost there</small><h1>Where should we deliver?</h1><p>Enter the details {merchant.business} will use to fulfil your order.</p></div>{field('name','Full name')}{field('phone','Phone number','tel')}{field('email','Email address','email','you@example.com')}{field('address','Delivery address','text','Street, area and city')}<div className="checkout-summary compact"><p><span>Items</span><b>{naira.format(cartTotal)}</b></p><p><span>Delivery</span><b>{Number(merchant.deliveryFee || 0) > 0 ? naira.format(merchant.deliveryFee) : 'Free'}</b></p><p className="checkout-total"><span>Total to pay</span><b>{naira.format(cartTotal + Number(merchant.deliveryFee || 0))}</b></p></div>{notice && <div className="notice">{notice}</div>}<button disabled={!draft.name || !draft.email || !draft.address || cart.length === 0} onClick={createCartOrder}>Continue to secure payment</button><small className="checkout-footnote">Your details are shared only with the seller for this order.</small></section></AppShell>
+
+
 
   if (screen === 'orders') return <AppShell onBack={go} back="dashboard" title="All orders"><section className="dashboard orders-screen"><div className="orders-summary"><span><b>{orders.length}</b> total</span><span><b>{orderStats.awaiting}</b> awaiting</span><span><b>{orderStats.active}</b> active</span></div><input className="search" type="search" value={orderSearch} onChange={event => setOrderSearch(event.target.value)} placeholder="Search order, buyer, phone or item"/><div className="filter-row" aria-label="Filter orders">{['All','Pending','Confirmed','Paid','Out for delivery','Delivered','Cancelled'].map(filter => <button key={filter} className={orderFilter === filter ? 'active' : ''} onClick={() => setOrderFilter(filter)}>{filter}</button>)}</div><div className="orders order-list">{filteredOrders.map(order => <button className="order" key={order.id} onClick={() => { setSelected(order); go('merchant-order') }}><div><b>{order.id} · {order.name}</b><span>{order.item} × {order.qty} · {naira.format(order.amount)}</span><small>{orderDate.format(new Date(order.createdAt || Date.now()))}</small></div><em className={order.status.toLowerCase().replaceAll(' ','-')}>{order.status}</em></button>)}{filteredOrders.length === 0 && <div className="empty-state"><strong>No matching orders</strong><span>Try another search or status filter.</span></div>}</div><button className="orders-create" onClick={() => go('create')}>+ Create new order</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
 
   if (screen === 'create') return <AppShell onBack={go} back="dashboard" title="Create order"><section className="form"><p className="step">Step 1 of 2 · Order details</p>{field('name','Customer name','text','Enter customer’s name')}{field('phone','Phone number','tel','0801 234 5678')}<ItemRows items={newItems} onChange={setNewItems}/>{field('delivery','Delivery fee','number','₦ 0.00')}<div className="total"><span>Order total</span><b>{naira.format(total)}</b></div><button disabled={!draft.name.trim() || !validItems(newItems) || total<=0} onClick={() => go('review')}>Continue</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
 
-  if (screen === 'review') return <AppShell onBack={go} back="create" title="Review order"><section className="form"><p className="step">Step 2 of 2 · Check before sharing</p><article className="card"><small>CUSTOMER</small><h3>{draft.name}</h3><p>{draft.phone}</p></article><h2>Order summary</h2><article className="card rows">{newItems.map((item,index)=><p key={index}><span>{item.name} × {item.quantity}{item.note&&<small className="item-note-copy">{item.note}</small>}</span><b>{naira.format(Number(item.unit_price)*Number(item.quantity))}</b></p>)}<p><span>Delivery fee</span><b>{naira.format(Number(draft.delivery || 0))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total)}</b></p></article>{notice && <div className="notice">{notice}</div>}<button onClick={saveOrder}>Create secure order link</button><button className="secondary" onClick={() => { setNotice('Draft saved'); go('dashboard') }}>Save as draft</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
+  if (screen === 'review') return <AppShell onBack={go} back="create" title="Review order"><section className="form"><p className="step">Step 2 of 2 · Check before sharing</p><article className="card"><small>CUSTOMER</small><h3>{draft.name}</h3><p>{draft.phone}</p></article><h2>Order summary</h2><article className="card rows">{newItems.map((item,index)=><p key={index}><span>{item.name} × {item.quantity}{item.note&&<small className="item-note-copy">{item.note}</small>}</span><b>{naira.format(Number(item.unit_price)*Number(item.quantity))}</b></p>)}<p><span>Delivery fee</span><b>{naira.format(Number(draft.delivery || 0))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total)}</b></p></article>{notice && <div className="notice">{notice}</div>}<button disabled={checkoutBusy} onClick={saveOrder}>{checkoutBusy ? 'Creating order…' : 'Create secure order link'}</button><button className="secondary" onClick={()=>go('create')}>Edit details</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
 
   if (screen === 'link') {
-    const orderId = selected?.id || 'OF-1025'
+    const orderId = selected?.id || ''
     const publicToken = selected?.publicToken || orderId
     const orderLink = typeof window === 'undefined' ? '' : `${window.location.origin}/?order=${encodeURIComponent(publicToken)}`
     const shareOnWhatsApp = () => {
-      const message = `Hi ${draft.name || 'there'}, ${merchant.business} has created order ${orderId} for ${draft.item || 'your item'}. Total: ${naira.format(total || selected?.amount || 18500)}. Review your order here: ${orderLink}`
+      const message = `Hi ${draft.name || 'there'}, ${merchant.business} has created order ${orderId} for ${draft.item || 'your item'}. Total: ${naira.format(total || selected?.amount || 0)}. Review your order here: ${orderLink}`
       window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
     }
     return <AppShell onBack={go}><section className="success"><div className="check">✓</div><h1>Order link is ready!</h1><p>Send this secure link to {draft.name || 'your customer'} so they can review and confirm the order.</p><div className="copy"><span>{orderLink}</span><button onClick={async () => { try { await navigator.clipboard.writeText(orderLink); setNotice('Link copied') } catch { setNotice('Copy the link above') } }}>Copy</button></div>{notice && <div className="notice">{notice}</div>}<button className="whatsapp" onClick={shareOnWhatsApp}>Share on WhatsApp</button><button className="secondary" onClick={async () => { if (navigator.share) await navigator.share({ title: `Order ${orderId}`, text: `Review your order from ${merchant.business}`, url: orderLink }); else { await navigator.clipboard.writeText(orderLink); setNotice('Link copied—share it with your buyer.') } }}>Share another way</button><button className="link" onClick={() => go('dashboard')}>Back to dashboard</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
   }
 
-  if (screen === 'confirm') return <AppShell onBack={go}><section className="form buyer-checkout"><div className="brand center">OrderFlow</div><div className="buyer-welcome"><small>Secure order from {merchant.business}</small><h1>Hi {draft.name || 'there'}, your order is ready to review.</h1><p>Everything is clearly listed below. Confirm when you are happy to continue.</p></div><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>Order number</span><b>{selected?.id || 'OF-1025'}</b></p>{selected?.lineItems?.length ? selected.lineItems.map((item,index)=><p key={index}><span>{item.name} × {item.quantity}{item.note&&<small className="item-note-copy">{item.note}</small>}</span><b>{naira.format(Number(item.unit_price)*Number(item.quantity))}</b></p>) : <p><span>{draft.item || 'Your item'} × {draft.qty}</span><b>{naira.format(Number(draft.price || 15000) * Number(draft.qty || 1))}</b></p>}<p><span>Delivery</span><b>{naira.format(Number(draft.delivery || 0))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total || selected?.amount || 18500)}</b></p></article><div className="buyer-trust"><span>✓ Secure checkout</span><span>✓ Live delivery updates</span></div>{notice && <div className="notice">{notice}</div>}<button onClick={confirmBuyerOrder}>{selected?.status === 'Confirmed' ? 'Continue to delivery' : 'Confirm order details'}</button><button className="secondary" onClick={() => setNotice('Please contact the seller using the WhatsApp message you received and describe the correction needed.')}>Request a correction</button></section></AppShell>
+  if (screen === 'confirm') return <AppShell onBack={go}><section className="form buyer-checkout"><div className="brand center">OrderFlow</div><div className="buyer-welcome"><small>Secure order from {merchant.business}</small><h1>Hi {draft.name || 'there'}, your order is ready to review.</h1><p>Everything is clearly listed below. Confirm when you are happy to continue.</p></div><article className="card rows"><p><span>Order from</span><b>{merchant.business}</b></p><p><span>Order number</span><b>{selected?.id || ''}</b></p>{selected?.lineItems?.length ? selected.lineItems.map((item,index)=><p key={index}><span>{item.name} × {item.quantity}{item.note&&<small className="item-note-copy">{item.note}</small>}</span><b>{naira.format(Number(item.unit_price)*Number(item.quantity))}</b></p>) : <p><span>{draft.item || 'Your item'} × {draft.qty}</span><b>{naira.format(Number(draft.price || 0) * Number(draft.qty || 1))}</b></p>}<p><span>Delivery</span><b>{naira.format(Number(draft.delivery || 0))}</b></p><p className="strong"><span>Total</span><b>{naira.format(total || selected?.amount || 0)}</b></p></article><div className="buyer-trust"><span>✓ Secure checkout</span><span>✓ Live delivery updates</span></div>{notice && <div className="notice">{notice}</div>}<button onClick={confirmBuyerOrder}>{selected?.status === 'Confirmed' ? 'Continue to delivery' : 'Confirm order details'}</button><button className="secondary" onClick={() => setNotice('Please contact the seller using the WhatsApp message you received and describe the correction needed.')}>Request a correction</button></section></AppShell>
 
-  if (screen === 'delivery') return <AppShell onBack={go} back="confirm" title="Delivery details"><section className="form"><p>Where should the seller deliver your order?</p>{field('name','Full name')}{field('phone','Phone number','tel')}{field('email','Email address','email','you@example.com')}{field('address','Delivery address','text','Street, area and city')}<div className="total"><span>Order total</span><b>{naira.format(total || 18500)}</b></div><button disabled={!draft.name || !draft.email || !draft.address} onClick={() => go('payment')}>Continue to payment</button></section></AppShell>
-
-  if (screen === 'payment') return <AppShell onBack={go} back="delivery" title="Choose payment method"><section className="form payment-form"><div className="payment-summary"><span>Amount to pay</span><strong>{naira.format(total || 18500)}</strong><small>Protected checkout · Test mode</small></div><label className={`choice ${paymentMethod === 'paystack' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'paystack'} onChange={() => { setPaymentMethod('paystack'); setNotice('') }}/><span><b>Paystack checkout</b><small>Card, USSD and mobile money</small></span><em>Recommended</em></label><label className={`choice ${paymentMethod === 'bank-transfer' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'bank-transfer'} onChange={() => { setPaymentMethod('bank-transfer'); setNotice('') }}/><span><b>Bank transfer</b><small>Pay securely by transfer through Paystack</small></span></label><label className={`choice ${paymentMethod === 'escrow' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'escrow'} onChange={() => setPaymentMethod('escrow')}/><span><b>Protected payment (Escrow)</b><small>Coming in the protected-payment update</small></span></label><label className={`choice ${paymentMethod === 'opay' ? 'selected' : ''}`}><input type="radio" name="payment" checked={paymentMethod === 'opay'} onChange={() => setPaymentMethod('opay')}/><span><b>OPay</b><small>Merchant connection required · Coming soon</small></span></label>{notice && <div className="notice">{notice}</div>}<button disabled={paymentBusy} onClick={startPayment}>{paymentBusy ? 'Opening secure payment…' : paymentMethod === 'escrow' ? 'Continue with protected payment' : paymentMethod === 'opay' ? 'Check availability' : `Pay ${naira.format(total || 18500)}`}</button><small className="center payment-note">Paystack is currently in test mode. No real money will be charged.</small></section></AppShell>
-
-  if (screen === 'paid') { const paidSubtotal = Number(selected?.unitPrice || draft.price || 0) * Number(selected?.qty || draft.qty || 1); const paidDelivery = Number(selected?.deliveryFee ?? draft.delivery ?? 0); const paidTotal = Number(selected?.amount || paidSubtotal + paidDelivery); return <AppShell onBack={go}><section className="success payment-success"><div className="success-mark"><span>✓</span></div><small className="success-label">Payment confirmed</small><h1>Thank you, {draft.name?.split(' ')[0] || 'your order is paid'}!</h1><p>{merchant.business} has received your payment and can now prepare your order.</p><article className="success-order-card"><div className="success-order-head"><span><small>Order number</small><b>{selected?.id || 'Order'}</b></span><em>Paid</em></div><div className="paid-items">{cart.length > 0 ? cart.map(entry => <div className="paid-item" key={entry.product.id}><div className="paid-item-image" style={{ backgroundImage: `url(${entry.product.image_url || seedProducts[0].image_url})` }}/><span><b>{entry.product.name}</b><small>{entry.quantity} × {naira.format(entry.product.price)}</small></span><strong>{naira.format(Number(entry.product.price) * entry.quantity)}</strong></div>) : <div className="paid-item fallback"><span><b>{selected?.item || draft.item || 'Your order'}</b><small>Purchased item</small></span><strong>{naira.format(paidSubtotal)}</strong></div>}</div><div className="paid-totals"><p><span>Subtotal</span><b>{naira.format(paidSubtotal)}</b></p><p><span>Delivery</span><b>{paidDelivery > 0 ? naira.format(paidDelivery) : 'Free'}</b></p><p className="paid-total"><span>Total paid</span><b>{naira.format(paidTotal)}</b></p></div>{paymentReference && <div className="payment-reference"><span>Payment reference</span><code>{paymentReference}</code></div>}</article><button className="track-order-primary" onClick={openTracking}>Track my order</button><div className="success-actions"><button className="secondary" onClick={shareTrackingLink}>Share tracking link</button><button className="secondary" onClick={contactSeller}>Contact seller</button></div>{storeMerchantId && <button className="link continue-shopping" onClick={openStorefront}>Continue shopping at {merchant.business}</button>}{notice && <div className="notice">{notice}</div>}{!session&&storeMerchantId&&<a className="buyer-signup-prompt" href="#" onClick={event=>{event.preventDefault();window.location.assign(buyerLink(storeMerchantId,merchant.business,[],true,selected?.publicToken))}}>Create an account to save and track this order →</a>}<div className="success-assurance"><span>✓ Payment verified</span><span>✓ Order tracking active</span></div></section></AppShell> }
-
-  if (screen === 'tracking') {
-    const status = selected?.status || 'Pending'
-    const activeIndex = trackingSteps.indexOf(status)
-    const [heading, description] = trackingCopy[status] || trackingCopy.Pending
-    return <AppShell onBack={go} back="paid" title="Track your order"><section className="form tracking-screen"><div className={`tracking-status ${status.toLowerCase().replaceAll(' ', '-')}`}><small>LIVE ORDER STATUS</small><h1>{heading}</h1><p>{description}</p></div><p className="tracking-updated">Last updated {orderDate.format(new Date(selected?.updatedAt || selected?.createdAt || Date.now()))}</p><article className="card rows"><p><span>Order</span><b>{selected?.id || 'Order'}</b></p><p><span>Order from</span><b>{merchant.business}</b></p><p><span>Total</span><b>{naira.format(selected?.amount || total || 18500)}</b></p></article><div className="tracking-heading"><h2>Order progress</h2><button onClick={refreshTracking} disabled={publicOrderLoading}>{publicOrderLoading ? 'Refreshing…' : 'Refresh status'}</button></div><div className="timeline">{trackingSteps.map((step, index) => <p key={step} className={status === 'Cancelled' ? '' : index < activeIndex ? 'done' : index === activeIndex ? 'current' : ''}><b>{step === 'Confirmed' ? 'Order confirmed' : step}</b><span>{step === 'Confirmed' ? 'Seller confirmed the order details' : step === 'Payment received' ? 'Payment has been securely confirmed' : step === 'Out for delivery' ? 'Your package is on the way' : 'Order received by the buyer'}</span></p>)}</div>{status === 'Cancelled' && <div className="notice tracking-cancelled">This order has been cancelled.</div>}{notice && <div className="notice">{notice}</div>}<button className="secondary" onClick={contactSeller}>Contact seller on WhatsApp</button></section></AppShell>
+  if (screen === 'delivery' || screen === 'store-delivery') {
+    const fromCart = screen === 'store-delivery'
+    const items = fromCart ? cart : selected?.lineItems?.length ? selected.lineItems : [{name:selected?.item,quantity:selected?.qty || 1,unit_price:selected?.unitPrice || 0}]
+    const subtotal = fromCart ? cartTotal : Number(selected?.unitPrice || 0) * Number(selected?.qty || 1)
+    const delivery = fromCart ? Number(merchant.deliveryFee || 0) : Number(selected?.deliveryFee || 0)
+    return <AppShell onBack={go} back={fromCart ? 'cart' : 'confirm'} title="Checkout"><section className="ux-checkout">
+      <div className="ux-heading"><div><span className="ux-eyebrow">One more step</span><h1>Make it yours.</h1><p>Add your delivery details, then choose how to pay.</p></div></div>
+      <div className="ux-checkout-grid"><form className="ux-panel ux-delivery-form" onSubmit={event=>{event.preventDefault();fromCart ? createCartOrder() : saveDelivery()}}>
+        <h2>Delivery details</h2><p className="ux-muted">For your order from {merchant.business}.</p>
+        <label>Full name<input required autoComplete="name" maxLength={120} value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label>
+        <div className="ux-field-pair"><label>Phone number <small>(optional)</small><input type="tel" autoComplete="tel" maxLength={40} value={draft.phone} onChange={e=>setDraft({...draft,phone:e.target.value})}/></label><label>Email address<input required type="email" autoComplete="email" maxLength={254} value={draft.email} onChange={e=>setDraft({...draft,email:e.target.value})}/></label></div>
+        <label>Delivery address<textarea required autoComplete="street-address" rows={2} maxLength={1000} placeholder="House number, street, area and city" value={draft.address} onChange={e=>setDraft({...draft,address:e.target.value})}/></label>
+        <details className="ux-note"><summary>Add a note for the seller <span>(optional)</span></summary><label className="ux-sr-only" htmlFor="buyer-note">Note for the seller</label><textarea id="buyer-note" rows={2} maxLength={1000} placeholder="Anything else the seller should know?" value={draft.note || ''} onChange={e=>setDraft({...draft,note:e.target.value})}/></details>
+        {notice && <p role="alert" className="notice">{notice}</p>}<button disabled={checkoutBusy || (fromCart && !cart.length)} type="submit" className="ux-primary">{checkoutBusy ? 'Saving your order…' : 'Continue to payment'}<Icon name="arrow"/></button><small className="ux-muted">You’ll review the amount before paying.</small>
+      </form><CheckoutSummary business={merchant.business} items={items} subtotal={subtotal} delivery={delivery}/></div>
+    </section></AppShell>
   }
 
 
-  if (screen === 'profile') return <AppShell onBack={go} back="dashboard" title="Profile"><section className="form profile-form"><FeatureBanner type="profile" /><div className="profile-head"><span className="avatar profile-avatar">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</span><div><h1>{merchant.name}</h1><p>{merchant.business}</p></div></div><label><span>Full name</span><input value={merchant.name} onChange={event => setMerchant({ ...merchant, name: event.target.value })}/></label><label><span>Business name</span><input value={merchant.business} onChange={event => setMerchant({ ...merchant, business: event.target.value })}/></label><label><span>Email address</span><input type="email" value={merchant.email || session?.user?.email || ''} onChange={event => setMerchant({ ...merchant, email: event.target.value })}/></label><label><span>Phone number</span><input type="tel" value={merchant.phone || ''} placeholder="0801 234 5678" onChange={event => setMerchant({ ...merchant, phone: event.target.value })}/></label><label><span>Storefront delivery fee</span><input type="number" min="0" value={merchant.deliveryFee || ''} placeholder="₦ 0 for free delivery" onChange={event => setMerchant({ ...merchant, deliveryFee: event.target.value })}/><small>This fixed fee will be added to storefront orders.</small></label>{notice && <div className="notice">{notice}</div>}<div className="profile-actions"><button onClick={saveProfile}>Save profile</button><button className="secondary" onClick={signOut}>Sign out</button></div></section><MerchantNav active="profile" onNavigate={go}/></AppShell>
+  if (screen === 'payment') return <AppShell onBack={go} back={selected?.channel==='Storefront' ? 'store-delivery' : 'delivery'} title="Payment"><section className="ux-checkout">
+    <div className="ux-heading"><div><span className="ux-eyebrow">Checkout</span><h1>Choose how to pay.</h1><p>Your order from {merchant.business} is ready.</p></div></div>
+    <div className="ux-checkout-grid"><div className="ux-panel ux-payment-options"><h2>Payment method</h2>
+      {[['paystack','Paystack checkout','Choose an available payment method on Paystack.'],['bank-transfer','Bank transfer','Use the account details provided by Paystack.'],['escrow','Protected payment · Test','Try the protected-payment flow using test funds.']].map(([value,label,detail])=><label key={value} className={`choice ${paymentMethod===value?'selected':''}`}><input type="radio" name="payment" value={value} checked={paymentMethod===value} onChange={()=>{setPaymentMethod(value);setNotice('')}}/><span><b>{label}</b><small>{detail}</small></span></label>)}
+      {notice && <p role="alert" className="notice">{notice}</p>}<button disabled={paymentBusy} className="ux-primary" onClick={startPayment}>{paymentBusy ? 'Opening payment…' : paymentMethod==='escrow' ? 'Continue to protected payment' : `Pay ${naira.format(selected?.amount || total)}`}<Icon name="arrow"/></button><p className="ux-muted">Payment status updates after Paystack confirms your transaction.</p>
+    </div><CheckoutSummary business={merchant.business} items={selected?.lineItems?.length ? selected.lineItems : [{name:selected?.item,quantity:selected?.qty||1,unit_price:selected?.unitPrice||0}]} subtotal={Number(selected?.unitPrice||0)*Number(selected?.qty||1)} delivery={selected?.deliveryFee || 0} total={selected?.amount || total}><div className="ux-address"><b>Deliver to {draft.name}</b><p>{draft.address}</p><button className="ux-text" onClick={()=>go(selected?.channel==='Storefront'?'store-delivery':'delivery')}>Edit details</button></div></CheckoutSummary></div>
+  </section></AppShell>
+
+
+  if (screen === 'paid' && selected?.paymentStatus==='paid') return <AppShell onBack={go}><section className="ux-payment-success">
+    <span className="ux-success-icon"><Icon name="check"/></span><span className="ux-eyebrow">Payment confirmed</span><h1>You’re all set, {draft.name?.split(' ')[0] || 'thank you'}.</h1><p>Your payment for {merchant.business} has been confirmed. Follow your order from here.</p>
+    <CheckoutSummary business={merchant.business} items={selected.lineItems?.length?selected.lineItems:[{name:selected.item,quantity:selected.qty,unit_price:selected.unitPrice}]} subtotal={Number(selected.unitPrice)*Number(selected.qty||1)} delivery={selected.deliveryFee} total={selected.amount}><div className="ux-receipt-meta"><span>Order <b>{selected.id}</b></span>{paymentReference&&<span>Payment reference <code>{paymentReference}</code></span>}</div></CheckoutSummary>
+    <button className="ux-primary" onClick={openTracking}>Track my order <Icon name="arrow"/></button><div className="ux-field-pair"><button className="ux-secondary" onClick={shareTrackingLink}>Save tracking link</button><button className="ux-secondary" onClick={contactSeller}>Contact seller</button></div>
+    {!session && <a className="ux-save-account" href={`/buyer?save=${encodeURIComponent(selected.publicToken)}&next=orders`}>Save this order to a buyer account <Icon name="arrow"/></a>}
+    <button className="ux-text" onClick={openStorefront}>Continue shopping</button>{notice&&<p role="status" className="notice">{notice}</p>}
+  </section><BuyerNav active="orders" count={cart.reduce((n,row)=>n+row.quantity,0)}/></AppShell>
+
+
+  if (screen === 'tracking' && selected) return <AppShell onBack={go} title="Order updates">
+    <TrackingView order={selected} business={merchant.business} connection={trackingConnection} onRetry={refreshTracking} onShare={shareTrackingLink} onContact={contactSeller} onShop={openStorefront} onPay={confirmBuyerOrder} notice={notice}/>
+    <BuyerNav active="orders" count={cart.reduce((n,row)=>n+row.quantity,0)}/>
+  </AppShell>
+
+
+  if (screen === 'profile') return <AppShell onBack={go} back="dashboard" title="Business"><section className="form profile-form"><FeatureBanner type="profile" /><div className="profile-head"><span className="avatar profile-avatar">{merchant.name.split(' ').map(part => part[0]).join('').slice(0,2).toUpperCase()}</span><div><h1>{merchant.name}</h1><p>{merchant.business}</p></div></div><label><span>Full name</span><input value={merchant.name} onChange={event => setMerchant({ ...merchant, name: event.target.value })}/></label><label><span>Business name</span><input value={merchant.business} onChange={event => setMerchant({ ...merchant, business: event.target.value })}/></label><label><span>Email address</span><input type="email" value={merchant.email || session?.user?.email || ''} onChange={event => setMerchant({ ...merchant, email: event.target.value })}/></label><label><span>Phone number</span><input type="tel" value={merchant.phone || ''} placeholder="0801 234 5678" onChange={event => setMerchant({ ...merchant, phone: event.target.value })}/></label><label><span>Storefront delivery fee</span><input type="number" min="0" value={merchant.deliveryFee || ''} placeholder="₦ 0 for free delivery" onChange={event => setMerchant({ ...merchant, deliveryFee: event.target.value })}/><small>This fixed fee will be added to storefront orders.</small></label>{notice && <div className="notice">{notice}</div>}<div className="profile-actions"><button onClick={saveProfile}>Save profile</button><button className="secondary" onClick={signOut}>Sign out</button></div></section><MerchantNav active="profile" onNavigate={go}/></AppShell>
 
   if (screen === 'edit-order' && editingOrder) return <AppShell onBack={go} back="merchant-order" title="Edit order"><section className="form"><label><span>Customer name</span><input value={editingOrder.name} onChange={event => setEditingOrder({ ...editingOrder, name: event.target.value })}/></label><label><span>Phone number</span><input type="tel" value={editingOrder.phone || ''} onChange={event => setEditingOrder({ ...editingOrder, phone: event.target.value })}/></label>{editingOrder.lineItems?.length ? <ItemRows items={editingOrder.lineItems} onChange={items=>setEditingOrder({...editingOrder,lineItems:items})}/> : <><label><span>Item or service</span><input value={editingOrder.item} onChange={event => setEditingOrder({ ...editingOrder, item: event.target.value })}/></label><div className="two"><label><span>Quantity</span><input type="number" min="1" value={editingOrder.qty} onChange={event => setEditingOrder({ ...editingOrder, qty: event.target.value })}/></label><label><span>Unit price</span><input type="number" min="0" value={editingOrder.unitPrice} onChange={event => setEditingOrder({ ...editingOrder, unitPrice: event.target.value })}/></label></div></>}<label><span>Delivery fee</span><input type="number" min="0" value={editingOrder.deliveryFee} onChange={event => setEditingOrder({ ...editingOrder, deliveryFee: event.target.value })}/></label><div className="total"><span>Updated total</span><b>{naira.format((editingOrder.lineItems?.length ? itemTotal(editingOrder.lineItems) : Number(editingOrder.unitPrice || 0) * Number(editingOrder.qty || 1)) + Number(editingOrder.deliveryFee || 0))}</b></div>{notice && <div className="notice">{notice}</div>}<button onClick={saveOrderEdits}>Save changes</button><button className="secondary" onClick={() => go('merchant-order')}>Cancel editing</button></section><MerchantNav active="orders" onNavigate={go}/></AppShell>
 
-  if (screen === 'merchant-order') return <AppShell onBack={go} back="orders" title={`Order ${selected.id}`}><section className="form"><p className="step">Created {orderDate.format(new Date(selected.createdAt || Date.now()))}</p><article className="card"><small>CUSTOMER</small><h3>{selected.name}</h3><p>{selected.phone || 'No phone number added'}</p></article><article className="card rows">{selected.lineItems?.length ? selected.lineItems.map((item,index)=><p key={index}><span>{item.name} × {item.quantity}{item.note&&<small className="item-note-copy">{item.note}</small>}</span><b>{naira.format(Number(item.unit_price)*Number(item.quantity))}</b></p>) : <p><span>{selected.item} × {selected.qty}</span><b>{naira.format(Number(selected.unitPrice ?? ((selected.amount - Number(selected.deliveryFee || 3500)) / Number(selected.qty || 1))) * Number(selected.qty || 1))}</b></p>}<p><span>Delivery</span><b>{naira.format(Number(selected.deliveryFee ?? 3500))}</b></p><p className="strong"><span>Total</span><b>{naira.format(selected.amount)}</b></p></article><label><span>Update progress</span><select value={statusDraft || selected.status} onChange={e=>setStatusDraft(e.target.value)}><option>Pending</option><option>Confirmed</option><option disabled={selected.paymentStatus!=='paid'}>Payment received</option><option>Out for delivery</option><option>Delivered</option><option>Cancelled</option></select></label><button onClick={updateOrderStatus}>Update order status</button><button className="secondary" onClick={openOrderEditor}>Edit order details</button>{selected.status !== 'Cancelled' && selected.status !== 'Delivered' && <button className="danger-button" onClick={cancelOrder}>Cancel order</button>}{notice&&<div className="notice">{notice}</div>}</section><MerchantNav active="merchant-order" onNavigate={go}/></AppShell>
+  if (screen === 'merchant-order') return <AppShell onBack={go} back="orders" title={`Order ${selected.id}`}><section className="form"><p className="step">Created {orderDate.format(new Date(selected.createdAt || Date.now()))}</p><article className="card"><small>CUSTOMER</small><h3>{selected.name}</h3><p>{selected.phone || 'No phone number added'}</p></article><article className="card rows">{selected.lineItems?.length ? selected.lineItems.map((item,index)=><p key={index}><span>{item.name} × {item.quantity}{item.note&&<small className="item-note-copy">{item.note}</small>}</span><b>{naira.format(Number(item.unit_price)*Number(item.quantity))}</b></p>) : <p><span>{selected.item} × {selected.qty}</span><b>{naira.format(Number(selected.unitPrice ?? ((selected.amount - Number(selected.deliveryFee || 0)) / Number(selected.qty || 1))) * Number(selected.qty || 1))}</b></p>}<p><span>Delivery</span><b>{naira.format(Number(selected.deliveryFee ?? 0))}</b></p><p className="strong"><span>Total</span><b>{naira.format(selected.amount)}</b></p></article>{selected.address&&<article className="card"><small>DELIVERY ADDRESS</small><p>{selected.address}</p>{selected.note&&<><small>BUYER NOTE</small><p>{selected.note}</p></>}</article>}<p className="ux-muted">Payment confirmation updates automatically. Update delivery progress when it changes.</p><label><span>Update progress</span><select value={statusDraft || selected.status} onChange={e=>setStatusDraft(e.target.value)}><option>Pending</option><option>Confirmed</option><option disabled={selected.paymentStatus!=='paid'}>Payment received</option><option>Out for delivery</option><option>Delivered</option><option>Cancelled</option></select></label><button onClick={updateOrderStatus}>Update order status</button>{selected.paymentStatus!=='paid' && <button className="secondary" onClick={openOrderEditor}>Edit order details</button>}{selected.status !== 'Cancelled' && selected.status !== 'Delivered' && <button className="danger-button" onClick={cancelOrder}>Cancel order</button>}{notice&&<div className="notice">{notice}</div>}</section><MerchantNav active="merchant-order" onNavigate={go}/></AppShell>
 
   return null
 }
