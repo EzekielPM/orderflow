@@ -1,5 +1,7 @@
 import './globals.css'
 import './layout-fixes.css'
+import './shop/shop.css'
+import './experience.css'
 import { GeistSans } from 'geist/font/sans'
 
 export const metadata = {
