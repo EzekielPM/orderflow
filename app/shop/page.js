@@ -27,6 +27,15 @@ export default function Shop() {
   const [notice, setNotice] = useState('')
   const requestVersion = useRef(0)
 
+  function changeView(next) {
+    if (next === view) return
+    // Clear the previous result shape before rendering the other view.
+    // Invalidate any in-flight request before the effect starts its replacement.
+    requestVersion.current += 1
+    setLoading(true); setResults([]); setMore(false); setError('')
+    setView(next); setOffset(0)
+  }
+
   function navigate(next) {
     setTab(next); setError(''); setNotice('')
     window.history.pushState({}, '', `/shop${next === 'shop' ? '' : `?tab=${next}`}`)
@@ -96,7 +105,7 @@ export default function Shop() {
         }
       } catch (e) {
         if (active) setError(e.message?.includes('temporarily') ? e.message : 'We couldn’t load the latest details. Please try again.')
-      } finally {if (active) setLoading(false)}
+      } finally {if (active && version === requestVersion.current) setLoading(false)}
     }, tab === 'shop' ? 250 : 0)
     return () => {active = false; clearTimeout(timer)}
   }, [tab, view, search, category, offset, retry, session?.user?.id])
@@ -142,12 +151,12 @@ export default function Shop() {
         <div className="ux-shop-intro"><span className="ux-eyebrow">Discover something you’ll love</span><h1>Good finds. Great stores.</h1><p>Explore products from independent vendors, all in one place.</p></div>
         <label className="ux-search"><Icon name="search"/><span className="ux-sr-only">Search products or vendors</span><input type="search" maxLength={120} placeholder="Search products or vendors…" value={search} onChange={e => {setSearch(e.target.value); setOffset(0)}}/>{search && <button aria-label="Clear search" onClick={() => {setSearch('');setOffset(0)}}>×</button>}</label>
         <div className="ux-categories" aria-label="Categories">{categories.map(c => <button key={c} aria-pressed={category === c} onClick={() => {setCategory(c);setOffset(0)}}>{c || 'All'}</button>)}</div>
-        <div className="ux-section-head ux-results-head"><h2>{search ? `Results for “${search}”` : category || 'Explore the catalogue'}</h2><div className="ux-segments" aria-label="Result type">{['products','stores'].map(v => <button key={v} aria-pressed={view === v} onClick={() => {setView(v);setOffset(0)}}>{v === 'products' ? 'Products' : 'Vendors'}</button>)}</div></div>
+        <div className="ux-section-head ux-results-head"><h2>{search ? `Results for “${search}”` : category || 'Explore the catalogue'}</h2><div className="ux-segments" aria-label="Result type">{['products','stores'].map(v => <button key={v} aria-pressed={view === v} onClick={() => changeView(v)}>{v === 'products' ? 'Products' : 'Vendors'}</button>)}</div></div>
         {!loading && !error && (results.length ? <>
           {view === 'products' ? <div className="ux-product-grid">{results.map(product => <article className="ux-product" key={product.id}>
             <a className="ux-product-photo-link" href={`/?store=${product.merchant_id}&product=${product.id}`}><ProductPhoto product={product}/>{Number(product.stock_quantity) === 0 && <span className="ux-stock-label">Sold out</span>}</a>
             <div className="ux-product-copy"><a className="ux-product-vendor" href={`/?store=${product.merchant_id}`}>{product.business_name}</a><h3><a href={`/?store=${product.merchant_id}&product=${product.id}`}>{product.name}</a></h3><div className="ux-product-price"><strong>{money.format(product.price)}</strong>{Number(product.stock_quantity) > 0 && Number(product.stock_quantity) <= 5 && <small>{product.stock_quantity} left</small>}</div><button className="ux-add" disabled={Number(product.stock_quantity) === 0} onClick={() => add(product)}><Icon name="plus"/>{Number(product.stock_quantity) === 0 ? 'Unavailable' : 'Add to cart'}</button></div>
-          </article>)}</div> : <div className="ux-vendor-grid">{results.map(store => <article className="ux-vendor" key={store.merchant_id}><a className="ux-vendor-photos" href={`/?store=${store.merchant_id}`}>{store.previews.map(p => <ProductPhoto key={p.id} product={p}/>)}</a><div><span><h3>{store.business_name}</h3><small>{store.product_count} products</small></span><a href={`/?store=${store.merchant_id}`}>Visit store <Icon name="arrow"/></a></div></article>)}</div>}
+          </article>)}</div> : <div className="ux-vendor-grid">{results.map(store => <article className="ux-vendor" key={store.merchant_id}><a className="ux-vendor-photos" href={`/?store=${store.merchant_id}`}>{(Array.isArray(store.previews) ? store.previews : []).map(p => <ProductPhoto key={p.id} product={p}/>)}</a><div><span><h3>{store.business_name}</h3><small>{store.product_count} products</small></span><a href={`/?store=${store.merchant_id}`}>Visit store <Icon name="arrow"/></a></div></article>)}</div>}
           {(offset > 0 || more) && <div className="ux-pagination"><button className="ux-secondary" disabled={!offset} onClick={() => {setOffset(n => Math.max(0,n-12));window.scrollTo(0,0)}}>Previous</button><span>Page {offset / 12 + 1}</span><button className="ux-secondary" disabled={!more} onClick={() => {setOffset(n => n+12);window.scrollTo(0,0)}}>Next</button></div>}
         </> : <EmptyState icon="search" title={search || category ? 'No matches this time' : 'The catalogue is getting started'}><p>{search || category ? 'Try another name or explore a different category.' : 'Products will appear as vendors publish them.'}</p>{(search || category) && <button className="ux-secondary" onClick={() => {setSearch('');setCategory('');setOffset(0)}}>Clear filters</button>}</EmptyState>)}
       </>}
