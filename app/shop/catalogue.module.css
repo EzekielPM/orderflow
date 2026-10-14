@@ -1,0 +1,172 @@
+/* Buyer catalogue only. Shared checkout, authentication and merchant styles stay scoped separately. */
+.market {
+  min-height: 100dvh;
+  padding-bottom: 40px;
+}
+
+.market :global(.ux-shop-header) {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  height: 76px;
+  padding: 12px max(28px, calc((100vw - 1120px) / 2));
+  gap: 24px;
+}
+
+.market :global(.ux-shop-content) {
+  width: min(100%, 1176px);
+  padding: 36px 28px;
+  scroll-margin-top: 96px;
+}
+
+.market :global(.ux-wordmark) {font-size: 22px; flex-shrink: 0;}
+.market :global(.ux-header-actions) {gap: 16px; flex-shrink: 0;}
+.market :global(.ux-header-actions)>a {display: grid; place-items: center; min-height: 44px;}
+.market :global(.ux-theme) {width: 44px; height: 44px; background: none; border-color: transparent;}
+.market :global(.ux-theme):hover {background: var(--ux-soft);}
+
+.market :global(.ux-buyer-nav) {
+  position: static;
+  inset: auto;
+  width: auto;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  z-index: auto;
+}
+
+.market :global(.ux-buyer-nav) :is(a, button) {
+  width: auto;
+  flex-direction: row;
+  gap: 9px;
+  padding: 12px 16px;
+  min-height: 44px;
+  font-size: 13px;
+  border-radius: 10px;
+}
+.market :global(.ux-buyer-nav .ux-icon) {width: 19px; height: 19px;}
+.market :global(.ux-buyer-nav .ux-nav-symbol) {display: flex;}
+.market :global(.ux-buyer-nav .ux-nav-symbol small) {top: -9px;}
+
+.intro {margin-bottom: 24px;}
+.market .intro h1 {font-size: clamp(26px, 2.5vw, 32px); font-weight: 550; letter-spacing: -.035em; margin: 0 0 8px;}
+.intro p {font-size: 15px; color: var(--ux-muted); margin: 0;}
+
+.searchRow {display: flex; align-items: stretch; gap: 12px; margin-bottom: 24px;}
+.searchBox {display: flex; align-items: center; gap: 12px; background: var(--ux-surface); border: 1px solid var(--ux-line); border-radius: 12px; padding: 0 16px; flex: 1; min-width: 0; color: var(--ux-muted);}
+.searchBox:focus-within {border-color: var(--ux-brand); outline: 2px solid var(--ux-brand); outline-offset: 2px;}
+.market .searchBox input {font-size: 16px; min-width: 0; min-height: 52px; padding: 12px 0; border: 0; background: none; border-radius: 0; margin: 0; outline: none; box-shadow: none;}
+.market .searchBox input::-webkit-search-cancel-button {display: none;}
+.market .searchBox input::placeholder {opacity: 1;}
+.market .searchBox button {width: 44px; height: 44px; padding: 0; margin: 0 -8px 0 0; flex-shrink: 0; background: none; color: var(--ux-muted); font-size: 24px; font-weight: 400;}
+.market label.category {margin: 0; width: 190px; flex-shrink: 0;}
+.market .category select {min-height: 54px; height: 100%; font-size: 14px; font-weight: 400; padding: 12px; border-radius: 12px;}
+
+.market .resumeCart {display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; margin: 0 0 24px; padding: 14px 18px; border: 1px solid var(--ux-line); background: var(--ux-mint); color: var(--ux-ink); border-radius: 14px;}
+.resumeIcon {display: grid; place-items: center; width: 40px; height: 40px; color: var(--ux-brand); flex-shrink: 0;}
+.resumeCart strong {display: block; font-size: 14px; font-weight: 500;}
+.resumeCart small {display: block; color: var(--ux-muted); font-size: 13px; margin-top: 2px;}
+.resumeCart>span:nth-child(2) {min-width: 0;}
+.resumeAction {display: inline-flex; align-items: center; gap: 8px; font-size: 13px; margin-left: auto; color: var(--ux-brand); white-space: nowrap;}
+.resumeAction :global(.ux-icon) {width: 16px;}
+
+.browseBar {display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 1px solid var(--ux-line); margin-bottom: 24px;}
+.views {display: flex; gap: 28px;}
+.market .views button {width: auto; min-height: 48px; padding: 10px 2px 16px; margin: 0 0 -1px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--ux-muted); background: transparent; font-size: 15px; font-weight: 500;}
+.market .views button[aria-pressed=true] {color: var(--ux-brand); border-bottom-color: var(--ux-brand);}
+.market .clearFilters {margin: 0; padding: 10px 0; min-height: 44px; width: auto; color: var(--ux-brand); background: transparent; font-size: 13px;}
+.market .resultTitle {font-size: 16px; font-weight: 500; margin: 0 0 20px; overflow-wrap: anywhere;}
+
+.market :global(.ux-product-grid) {grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; align-items: stretch;}
+.market :global(.ux-product) {border-radius: 16px; display: flex; flex-direction: column; transition: border-color .18s;}
+.market :global(.ux-product):hover {border-color: var(--ux-muted);}
+.market :global(.ux-product .ux-photo) {aspect-ratio: 1.12;}
+.market :global(.ux-product-copy) {display: flex; flex-direction: column; flex: 1; padding: 16px;}
+.market :global(.ux-product-copy h3) {min-height: 0; font-size: 15px; line-height: 1.45; margin: 0 0 6px; overflow-wrap: anywhere;}
+.market :global(.ux-product-copy h3 a) {font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;}
+.market :global(.ux-product-vendor) {font-size: 12px !important; margin: 0 0 14px; font-weight: 400;}
+.market :global(.ux-product-price) {display: block; margin: auto 0 14px;}
+.market :global(.ux-product-price strong) {font-size: 17px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere;}
+.market :global(.ux-add) {min-height: 44px; font-size: 13px; border-radius: 9px; background: var(--ux-surface); border: 1px solid var(--ux-line); color: var(--ux-brand); padding: 10px 8px; font-weight: 500;}
+.market :global(.ux-add):hover:not(:disabled),.market :global(.ux-add[data-in-cart=true]) {background: var(--ux-mint); border-color: var(--ux-mint);}
+.market :global(.ux-add):disabled {opacity: .65;}
+.market :global(.ux-stock-label) {font-size: 12px;}
+.market :global(.ux-vendor-grid) {grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px;}
+.market :global(.ux-vendor-photos) {min-height: 90px; background: var(--ux-soft);}
+.market :global(.ux-vendor>div) {padding: 18px; gap: 12px; flex-wrap: wrap;}
+.market :global(.ux-vendor h3) {font-size: 16px; font-weight: 500;}
+.market :global(.ux-vendor small) {font-size: 13px;}
+.market :global(.ux-vendor>div>a) {display: inline-flex; align-items: center; gap: 4px; min-height: 44px;}
+.market :global(.ux-vendor>div .ux-icon) {width: 16px;}
+.market :global(.ux-pagination) {position: static; inset: auto; height: auto; width: auto; padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; z-index: auto;}
+.market :global(.ux-toast) {bottom: 28px;}
+
+.skeleton {border: 1px solid var(--ux-line); border-radius: 16px; overflow: hidden; background: var(--ux-surface); padding-bottom: 12px;}
+.skeleton>div {aspect-ratio: 1.12; background: var(--ux-soft);}
+.skeleton>span {display: block; height: 12px; border-radius: 4px; margin: 16px; width: 65%; background: var(--ux-soft);}
+.skeleton>span:nth-child(3) {width: 40%;}
+.skeleton>span:last-child {height: 38px; width: auto;}
+.market .skipLink {position: fixed; top: 8px; left: 16px; transform: translateY(-150%); padding: 12px 18px; z-index: 100; background: var(--ux-surface); border: 1px solid var(--ux-brand); border-radius: 8px;}
+.market .skipLink:focus {transform: translateY(0);}
+
+@media (max-width: 1023px) {
+  .market {padding-bottom: calc(92px + env(safe-area-inset-bottom));}
+  .market :global(.ux-shop-header) {height: 70px; padding: 12px 24px;}
+  .market :global(.ux-shop-content) {padding: 28px 24px;}
+  .market :global(.ux-buyer-nav) {position: fixed; inset: auto 0 0; width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 160px)); gap: 4px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--ux-line); background: var(--ux-surface);}
+  .market :global(.ux-buyer-nav) :is(a, button) {width: 100%; flex-direction: column; gap: 6px; padding: 8px; min-height: 54px; font-size: 12px;}
+  .market :global(.ux-buyer-nav .ux-icon) {width: 21px; height: 21px;}
+  .market :global(.ux-product-grid),.market :global(.ux-vendor-grid) {grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px;}
+  .market :global(.ux-vendor-grid) {grid-template-columns: repeat(2, minmax(0, 1fr));}
+  .market :global(.ux-toast) {bottom: calc(90px + env(safe-area-inset-bottom));}
+}
+
+@media (max-width: 640px) {
+  .market :global(.ux-shop-header) {height: 64px; padding: 10px 16px; gap: 12px;}
+  .market :global(.ux-wordmark) {font-size: 20px;}
+  .market :global(.ux-header-actions) {gap: 8px;}
+  .market :global(.ux-header-actions)>a {font-size: 13px;}
+  .market :global(.ux-shop-content) {padding: 24px 16px;}
+  .intro {margin-bottom: 20px;}
+  .intro p {font-size: 14px; max-width: 290px;}
+  .searchRow {flex-wrap: wrap; gap: 10px; margin-bottom: 8px;}
+  .searchBox {flex-basis: 100%; padding: 0 12px;}
+  .market .searchBox input {min-height: 50px;}
+  .market label.category {width: 100%;}
+  .market .category select {width: auto; max-width: 100%; min-height: 44px; padding: 10px 26px 10px 2px; background-color: transparent; border: 0; font-size: 13px;}
+  .market .resumeCart {padding: 12px; margin: 12px 0; gap: 8px;}
+  .resumeIcon {width: 28px;}
+  .resumeCart strong {font-size: 13px;}
+  .resumeCart small {font-size: 12px;}
+  .resumeAction {font-size: 12px; gap: 2px;}
+  .browseBar {margin-bottom: 18px;}
+  .market .views button {font-size: 14px; padding-bottom: 13px;}
+  .market :global(.ux-product-grid) {grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px;}
+  .market :global(.ux-product) {border-radius: 13px;}
+  .market :global(.ux-product .ux-photo) {aspect-ratio: 1;}
+  .market :global(.ux-product-copy) {padding: 12px;}
+  .market :global(.ux-product-copy h3) {font-size: 14px;}
+  .market :global(.ux-product-vendor) {margin-bottom: 12px;}
+  .market :global(.ux-product-price) {margin-bottom: 12px;}
+  .market :global(.ux-product-price strong) {font-size: 16px;}
+  .market :global(.ux-add) {font-size: 12px; gap: 5px;}
+  .market :global(.ux-vendor-grid) {grid-template-columns: 1fr;}
+  .market :global(.ux-vendor-photos .ux-photo) {aspect-ratio: 1.15;}
+  .skeleton>div {aspect-ratio: 1;}
+}
+
+@media (max-width: 359px) {
+  .market :global(.ux-shop-content) {padding-inline: 12px;}
+  .market :global(.ux-product-copy) {padding: 10px;}
+  .market :global(.ux-product-grid) {gap: 12px 10px;}
+  .resumeIcon {display: none;}
+  .market :global(.ux-buyer-nav) {padding-inline: 6px;}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .market :global(.ux-product) {transition: none;}
+}
