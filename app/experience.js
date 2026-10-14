@@ -22,8 +22,13 @@ export function Icon({ name, className = '' }) {
     truck: <><path d="M2 5h12v12H2V5Zm12 5h4l4 4v3h-8"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></>,
     link: <><path d="m10 13 4-4M8 16l-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 1 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0" transform="translate(1 0)"/></>,
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></>,
+    shield: <><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></>,
   }
   return <svg className={`ux-icon ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name] || paths.box}</svg>
+}
+
+export function ProtectedPaymentsLink() {
+  return <a className="ux-secondary ux-protected-link" href="/protected-payment"><Icon name="shield"/><span>Protected payments</span><Icon name="arrow"/></a>
 }
 
 export function ThemeToggle() {
@@ -86,6 +91,7 @@ export function VendorOverview({ merchant, orders, products, onNavigate, onOrder
   return <section className="dashboard ux-overview">
     <div className="ux-heading"><div><p>Hello, {name}</p><h1>Your business, at a glance.</h1><span>Here’s what needs your attention.</span></div><button className="ux-primary" onClick={() => onNavigate('create')}><Icon name="plus"/>Create order</button></div>
     {notice && <p role="status" className="notice">{notice}</p>}
+    <div className="ux-protection-entry"><ProtectedPaymentsLink/><p className="ux-muted">Report delivery and follow reviews for protected orders.</p></div>
     <div className="ux-metrics">
       {[['Awaiting confirmation',pending.length,'clock'],['Ready to dispatch',ready.length,'box'],['Out for delivery',out.length,'truck']].map(([label,value,icon]) => <article key={label}><Icon name={icon}/><span>{label}</span><strong>{value}</strong></article>)}
     </div>
@@ -118,6 +124,7 @@ export function TrackingView({ order, business, connection, onRetry, onShare, on
   }
   const [title,detail] = copy[order.status] || ['Checking your order', 'We are loading the latest order status.']
   return <section className="ux-tracking"><div className="ux-heading"><div><small className="ux-eyebrow">{business}</small><h1>Track your order</h1><span className="ux-order-id">{order.id}</span></div><button className="ux-secondary" onClick={onShare}><Icon name="link"/>Save tracking link</button></div>
+    {order.publicToken && order.paymentStatus === 'paid' && <div className="ux-protection-entry"><ProtectedPaymentsLink/><p className="ux-muted">Used protected payment? Confirm receipt or report an issue here.</p></div>}
     <div className="ux-tracking-grid"><article className="ux-panel ux-tracking-main"><div className={`ux-delivery-hero ${order.status === 'Cancelled' ? 'is-cancelled' : ''}`}><span className="ux-delivery-icon"><Icon name={order.status === 'Delivered' ? 'check' : order.status === 'Out for delivery' ? 'truck' : 'box'}/></span><h2 aria-live="polite">{title}</h2><p>{detail}</p></div>
       <div className="ux-sync" role="status"><span className={connection === 'offline' ? 'offline' : ''}/>{connection === 'offline' ? 'Connection interrupted. Showing the last update.' : 'This page checks for updates automatically.'}<button onClick={onRetry} className="ux-text">Refresh</button></div>
       {order.status !== 'Cancelled' && <ol className="ux-progress">{steps.map((step,index) => <li key={step} className={index < position ? 'complete' : index === position ? 'current' : ''} aria-current={index === position ? 'step' : undefined}><span>{index < position ? <Icon name="check"/> : index + 1}</span><div><b>{step === 'Confirmed' ? 'Order confirmed' : step}</b><small>{index < position ? 'Completed' : index === position ? 'Current stage' : 'Next'}</small></div></li>)}</ol>}
