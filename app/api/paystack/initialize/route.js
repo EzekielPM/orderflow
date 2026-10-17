@@ -1,14 +1,25 @@
 import { NextResponse } from 'next/server'
-import { getOrderForPayment } from '../../../../lib/payments'
+import { getOrderForPayment, getPaymentMode } from '../../../../lib/payments'
 import { protectionClient, protectionUser } from '../../../../lib/protection-server'
+
+export async function GET() {
+  try {
+    return NextResponse.json({ mode: getPaymentMode() }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch {
+    return NextResponse.json({ message: 'Checkout is temporarily unavailable.' }, { status: 503, headers: { 'Cache-Control': 'no-store' } })
+  }
+}
 
 export async function POST(request) {
   try {
     const secretKey = process.env.PAYSTACK_SECRET_KEY
-    if (!secretKey) return NextResponse.json({ message: 'Paystack test key has not been added yet.' }, { status: 503 })
+    if (!secretKey) return NextResponse.json({ message: 'Checkout is temporarily unavailable.' }, { status: 503 })
+    const mode = getPaymentMode()
 
-    const { email, orderId, orderToken, paymentMethod = 'paystack' } = await request.json()
-    if (!email) return NextResponse.json({ message: 'A buyer email address is required for payment.' }, { status: 400 })
+    const { email, orderId, orderToken, paymentMethod = 'paystack', expectedMode } = await request.json()
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return NextResponse.json({ message: 'A valid buyer email address is required for payment.' }, { status: 400 })
+    if (!['paystack','bank-transfer','escrow'].includes(paymentMethod)) return NextResponse.json({ message: 'Choose an available payment method.' }, { status: 400 })
+    if (expectedMode && expectedMode !== mode) return NextResponse.json({ message: 'The payment mode has changed. Reload this page to review it before continuing.' }, { status: 409 })
     const { amountKobo, supabase, order } = await getOrderForPayment(orderId, orderToken)
     if (order.payment_status === 'paid' || order.payment_status === 'refunded') {
       return NextResponse.json({ message: 'This order already has a completed payment. Open its tracking link for the latest status.' }, { status: 409 })
@@ -22,7 +33,7 @@ export async function POST(request) {
       if(error) return NextResponse.json({message:error.message},{status:400})
       if(data.state !== 'awaiting_payment') return NextResponse.json({message:'This protected order is already paid.'},{status:409})
       protectedRecord=data; buyerEmail=user.email
-      if(data.checkout_url) return NextResponse.json({authorizationUrl:data.checkout_url})
+      if(data.checkout_url) return NextResponse.json({authorizationUrl:data.checkout_url,mode})
     } else if(existing) return NextResponse.json({message:'Continue this order from Protected payments.'},{status:409})
 
     const payload = {
@@ -45,6 +56,7 @@ export async function POST(request) {
       headers: { Authorization: `Bearer ${secretKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
     })
     const result = await response.json().catch(() => null)
     if (!response.ok || !result?.status) return NextResponse.json({ message: result?.message || 'Paystack could not start this payment.' }, { status: 502 })
@@ -52,9 +64,11 @@ export async function POST(request) {
       const {error}=await supabase.from('protected_payments_test').update({checkout_url:result.data.authorization_url}).eq('id',protectedRecord.id)
       if(error) throw error
     }
-    return NextResponse.json({ authorizationUrl: result.data.authorization_url })
+    return NextResponse.json({ authorizationUrl: result.data.authorization_url, mode, reference: result.data.reference })
   } catch (error) {
-    console.error('Paystack initialization failed:', error)
+    console.error('Paystack initialization failed:', error?.code || error?.name || 'unknown')
+    if([409,503].includes(error.status))return NextResponse.json({message:error.message},{status:error.status})
     return NextResponse.json({ message: 'The payment service is temporarily unavailable. Please try again.' }, { status: 500 })
   }
 }
+
