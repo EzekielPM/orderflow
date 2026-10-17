@@ -20,6 +20,14 @@ export default function TradeFlowBranding() {
         if (value && /orderflow/i.test(value)) element.setAttribute(attr, replaceBrand(value))
       }
 
+      if (element.matches('.ux-wordmark') && element.textContent?.trim().toLowerCase() === 'orderflow') {
+        const directText = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim().toLowerCase() === 'order')
+        if (directText) directText.nodeValue = 'Trade'
+        const flow = [...element.children].find(child => child.tagName === 'SPAN' && child.textContent?.trim().toLowerCase() === 'flow')
+        if (flow) flow.textContent = 'Flow'
+        element.setAttribute('aria-label', 'TradeFlow shop')
+      }
+
       if (element.matches('.orderflow-logo strong, .ux-header-brand')) {
         if (element.textContent?.trim().toLowerCase() === 'orderflow') {
           element.innerHTML = 'Trade<span>Flow</span>'
@@ -46,6 +54,10 @@ export default function TradeFlowBranding() {
       while (walker.nextNode()) updateNode(walker.currentNode)
     }
 
+    const forceBuyerBranding = () => {
+      document.querySelectorAll('.ux-wordmark, .orderflow-logo strong, .ux-header-brand, .brand').forEach(updateElementBranding)
+    }
+
     const originalOpen = window.open
     window.open = function patchedOpen(url, ...args) {
       const nextUrl = typeof url === 'string' ? replaceBrand(url) : url
@@ -53,6 +65,7 @@ export default function TradeFlowBranding() {
     }
 
     updateTree(document.body)
+    forceBuyerBranding()
 
     const observer = new MutationObserver(mutations => {
       for (const mutation of mutations) {
@@ -60,6 +73,7 @@ export default function TradeFlowBranding() {
         mutation.addedNodes.forEach(updateTree)
         if (mutation.target?.nodeType === Node.ELEMENT_NODE) updateElementBranding(mutation.target)
       }
+      forceBuyerBranding()
     })
 
     observer.observe(document.body, { subtree: true, childList: true, characterData: true })
