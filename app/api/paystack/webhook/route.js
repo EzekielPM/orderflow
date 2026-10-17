@@ -12,8 +12,8 @@ export async function POST(request) {
   const signature = request.headers.get('x-paystack-signature') || ''
   const expected = createHmac('sha512', secretKey).update(rawBody).digest('hex')
   const validSignature =
-    signature.length === expected.length &&
-    timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+    /^[a-fA-F0-9]{128}$/.test(signature) &&
+    timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'))
 
   if (!validSignature) return NextResponse.json({ message: 'Invalid signature.' }, { status: 401 })
 
@@ -24,13 +24,14 @@ export async function POST(request) {
     return NextResponse.json({ message: 'Invalid payload.' }, { status: 400 })
   }
 
-  if (event.event !== 'charge.success') return NextResponse.json({ received: true })
+  if (event?.event !== 'charge.success') return NextResponse.json({ received: true })
 
   try {
     await recordSuccessfulPayment(event.data)
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error('Paystack webhook processing failed:', error)
+    console.error('Paystack webhook processing failed:', error.code || 'recording_failed')
     return NextResponse.json({ message: 'Payment could not be recorded.' }, { status: 500 })
   }
 }
+
