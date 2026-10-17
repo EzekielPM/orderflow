@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import './protected.css'
+import {HeaderActions} from '../iteration'
 
 const money = value => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(value)
 const labels = { awaiting_payment: 'Awaiting test payment', held_test: 'Test payment protected', delivery_review: 'Delivery review', disputed: 'Dispute under review', released_test: 'Test release recorded', refunded_test: 'Test refund recorded' }
@@ -21,8 +22,7 @@ export default function ProtectedPayment() {
   const [dark, setDark] = useState(false)
 
   useEffect(() => {
-    const theme=localStorage.getItem('orderflow-theme') === 'dark'
-    setDark(theme); document.documentElement.dataset.theme=theme?'dark':'light'
+
     if (!supabase) { setNotice('Supabase is not configured.'); setReady(true); return }
     let active=true
     supabase.auth.getSession().then(({data}) => {if(active){setSession(data.session);setReady(true)}})
@@ -97,7 +97,7 @@ export default function ProtectedPayment() {
   }
   const linkedRecord=records.find(r=>r.orders?.public_token===token)
   return <main className="protection-page">
-    <header><a href="/">‹ OrderFlow</a><button className="protect-secondary" aria-label="Switch theme" onClick={()=>{const value=!dark;setDark(value);localStorage.setItem('orderflow-theme',value?'dark':'light');document.documentElement.dataset.theme=value?'dark':'light'}}>{dark?'Light theme':'Dark theme'}</button></header>
+    <header className="pp-header"><a href={token?`/?track=${encodeURIComponent(token)}`:'/shop'}>‹ Back to OrderFlow</a><HeaderActions role={!token&&records.some(r=>r.merchant_id===session?.user?.id)?'merchant':'buyer'}/></header>
     <section className="protect-intro"><span className="protect-tag">PAYSTACK TEST MODE</span><h1>Protected payments</h1><p>Review delivery, report an issue and follow the outcome in one place.</p><small>This workflow saves real records in OrderFlow. Payments use test funds; releases and refunds are simulated. No real money is held or transferred.</small></section>
     {notice && <p className="protect-notice" role="status">{notice}</p>}
     {!ready ? <p>Loading your account…</p> : !session ? <section className="protect-card"><h2>Verify your email to continue</h2><p>Your account keeps delivery confirmation and disputes under your control.</p><form onSubmit={signIn}><label>Email address<input type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label><button disabled={busy || !supabase}>Send sign-in link</button></form></section> : <>
@@ -126,3 +126,4 @@ export default function ProtectedPayment() {
     </>}
   </main>
 }
+
