@@ -150,3 +150,13 @@ body:has(.buyer-auth){padding:24px;background:var(--ux-bg)}.buyer-auth{max-width
 .experience input[type=checkbox]{width:18px;height:18px;min-height:18px;padding:0;margin:0;accent-color:#0b5c7b}
 .ux-resume-payment{padding:0 24px 24px}
 .ux-resume-payment .ux-primary{width:100%}
+
+
+/* A payment's recorded mode is kept visible on receipt and tracking screens. */
+.ux-payment-mode{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;margin:18px 0 24px;border:1px solid #e6cf91;border-radius:16px;background:#fff8e8;color:#644910;text-align:left;line-height:1.55}
+.ux-payment-mode>.ux-icon{width:20px;height:20px;flex-shrink:0;margin-top:2px}
+.ux-payment-mode b{font-size:14px;font-weight:600}
+.phone.experience .ux-payment-mode p{font-size:13px;margin:4px 0 0;color:inherit}
+[data-theme="dark"] .ux-payment-mode{background:#302a1c;border-color:#69552f;color:#f0dca7}
+.phone.experience .order>.ux-status{flex-shrink:0;font-size:11px}
+@media(max-width:600px){.phone.experience .order>.ux-status{margin-left:auto;max-width:100%;white-space:normal}}

@@ -7,6 +7,12 @@ export const money = new Intl.NumberFormat('en-NG', { style: 'currency', currenc
 
 export function Icon({ name, className = '' }) {
   const paths = {
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></>,
+    menu: <path d="M4 6h16M4 12h16M4 18h16"/>,
+    close: <path d="m6 6 12 12M6 18 18 6"/>,
+    location: <><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="2"/></>,
+    system: <><rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8M12 16v5"/></>,
+    logout: <><path d="M10 3H3v18h7m5-14 5 5-5 5M8 12h12"/></>,
     shop: <><path d="M3 10h18l-2-7H5l-2 7Z M5 10v11h14V10 M9 21v-7h6v7"/><path d="M3 10c0 3 4 3 4 0 0 3 5 3 5 0 0 3 5 3 5 0 0 3 4 3 4 0"/></>,
     cart: <><path d="M2 3h3l3 12h11l3-9H6"/><circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></>,
     orders: <><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8m-8 4h8m-8 4h5"/></>,
@@ -63,33 +69,41 @@ export function BuyerNav({ active, count = 0, onNavigate }) {
   </nav>
 }
 
-export function StatusBadge({ status }) {
-  return <span className={`ux-status status-${String(status).toLowerCase().replaceAll(' ', '-')}`}>{status}</span>
+export function StatusBadge({ status, paymentMode, paymentStatus }) {
+  const unverified = status === 'Payment received' && paymentStatus && paymentStatus !== 'paid'
+  const label = unverified ? 'Awaiting payment' : status === 'Payment received' && paymentMode === 'test' ? 'Test payment confirmed' : `${status}${paymentMode === 'test' ? ' · Test' : ''}`
+  return <span className={`ux-status status-${String(unverified ? 'Pending' : status).toLowerCase().replaceAll(' ', '-')}`}>{label}</span>
+}
+
+export function PaymentModeNotice({ mode, paid = false }) {
+  if (mode !== 'test') return null
+  return <div className="ux-payment-mode" role="note"><Icon name="shield"/><div><b>{paid ? 'Test payment confirmed' : 'Paystack test mode'}</b><p>{paid ? 'No real money was received for this order. This payment is for testing only.' : 'This checkout uses test funds. Do not send a real bank transfer.'}</p></div></div>
 }
 
 export function EmptyState({ icon = 'box', title, children }) {
   return <div className="ux-empty"><span className="ux-empty-icon"><Icon name={icon}/></span><h2>{title}</h2>{children}</div>
 }
 
-export function CheckoutSummary({ business, items = [], subtotal = 0, delivery = 0, total, children }) {
+export function CheckoutSummary({ business, items = [], subtotal = 0, delivery = null, total, children }) {
   return <aside className="ux-summary"><small className="ux-eyebrow">Your order from</small><h2>{business}</h2>
     {items.map((row, index) => <div className="ux-summary-item" key={row.product?.id || index}>
       {row.product && <ProductPhoto product={row.product}/>}<span>{row.product?.name || row.name}<small>Qty {row.quantity}</small></span>
       <b>{money.format(Number(row.product?.price ?? row.unit_price) * Number(row.quantity))}</b>
     </div>)}
-    <dl className="ux-totals"><div><dt>Subtotal</dt><dd>{money.format(subtotal)}</dd></div><div><dt>Delivery</dt><dd>{Number(delivery) === 0 ? 'Free' : money.format(delivery)}</dd></div><div className="ux-total"><dt>Total</dt><dd>{money.format(total ?? Number(subtotal) + Number(delivery))}</dd></div></dl>{children}
+    <dl className="ux-totals"><div><dt>Subtotal</dt><dd>{money.format(subtotal)}</dd></div><div><dt>Delivery</dt><dd>{delivery == null ? 'Choose delivery area' : Number(delivery) === 0 ? 'Free' : money.format(delivery)}</dd></div><div className="ux-total"><dt>{delivery == null ? 'Subtotal' : 'Total'}</dt><dd>{money.format(delivery == null ? subtotal : total ?? Number(subtotal) + Number(delivery))}</dd></div></dl>{children}
   </aside>
 }
 
 export function VendorOverview({ merchant, orders, products, onNavigate, onOrder, onEditProduct, onShare, notice }) {
   const pending = orders.filter(o => o.status === 'Pending')
-  const ready = orders.filter(o => o.status === 'Payment received')
+  const ready = orders.filter(o => o.status === 'Payment received' && o.paymentStatus === 'paid')
   const out = orders.filter(o => o.status === 'Out for delivery')
   const low = products.filter(p => p.active && Number(p.stock_quantity) <= 5).sort((a,b) => a.stock_quantity - b.stock_quantity)
   const needs = [...ready, ...pending].slice(0, 4)
   const name = merchant.name?.split(' ')[0] || 'there'
   return <section className="dashboard ux-overview">
     <div className="ux-heading"><div><p>Hello, {name}</p><h1>Your business, at a glance.</h1><span>Here’s what needs your attention.</span></div><button className="ux-primary" onClick={() => onNavigate('create')}><Icon name="plus"/>Create order</button></div>
+    <div className="it-hero"><small>Your business, your way</small><h2>Good orders start here.</h2><p>Keep your products, buyers and deliveries in step.</p><button className="ux-secondary" onClick={()=>onNavigate('delivery-rates')}><Icon name="location"/>Manage delivery areas</button></div>
     {notice && <p role="status" className="notice">{notice}</p>}
     <div className="ux-protection-entry"><ProtectedPaymentsLink/><p className="ux-muted">Report delivery and follow reviews for protected orders.</p></div>
     <div className="ux-metrics">
@@ -97,10 +111,10 @@ export function VendorOverview({ merchant, orders, products, onNavigate, onOrder
     </div>
     <div className="ux-workspace"><div>
       <article className="ux-panel"><div className="ux-section-head"><h2>Needs your attention</h2><button className="ux-text" onClick={() => onNavigate('orders')}>All orders <Icon name="arrow"/></button></div>
-        {needs.length ? needs.map(o => <button className="ux-attention-row" key={o.id} onClick={() => onOrder(o)}><span className="ux-initial">{o.name?.slice(0,1).toUpperCase() || 'B'}</span><span><b>{o.name}</b><small>{o.item}</small><StatusBadge status={o.status}/></span><span><b>{money.format(o.amount)}</b><small>{o.status === 'Payment received' ? 'Arrange delivery' : 'Review order'} <Icon name="arrow"/></small></span></button>) : <EmptyState icon="check" title="You’re all caught up"><p>New orders and payments will appear here.</p></EmptyState>}
+        {needs.length ? needs.map(o => <button className="ux-attention-row" key={o.id} onClick={() => onOrder(o)}><span className="ux-initial">{o.name?.slice(0,1).toUpperCase() || 'B'}</span><span><b>{o.name}</b><small>{o.item}</small><StatusBadge status={o.status} paymentMode={o.paymentMode} paymentStatus={o.paymentStatus}/></span><span><b>{money.format(o.amount)}</b><small>{o.paymentMode === 'test' ? 'Review test order' : o.status === 'Payment received' ? 'Arrange delivery' : 'Review order'} <Icon name="arrow"/></small></span></button>) : <EmptyState icon="check" title="You’re all caught up"><p>New orders and payments will appear here.</p></EmptyState>}
       </article>
       <article className="ux-panel"><div className="ux-section-head"><h2>Recent activity</h2><span className="ux-muted">Updates automatically</span></div>
-        {orders.length ? orders.slice().sort((a,b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)).slice(0,4).map(o => <button className="ux-activity-row" key={o.id} onClick={() => onOrder(o)}><span><b>{o.name}</b><small>{o.id}</small></span><StatusBadge status={o.status}/></button>) : <p className="ux-muted">Create an order or share your store to get started.</p>}
+        {orders.length ? orders.slice().sort((a,b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)).slice(0,4).map(o => <button className="ux-activity-row" key={o.id} onClick={() => onOrder(o)}><span><b>{o.name}</b><small>{o.id}</small></span><StatusBadge status={o.status} paymentMode={o.paymentMode} paymentStatus={o.paymentStatus}/></button>) : <p className="ux-muted">Create an order or share your store to get started.</p>}
       </article>
     </div><aside>
       <article className="ux-store-invite"><span className="ux-eyebrow">Your storefront</span><Icon name="shop"/><h2>{merchant.business || 'Your store'}</h2><p>One link to your products.<br/>Ready for your next customer.</p><button onClick={onShare}><Icon name="link"/>Share store</button><a href={`/?store=${merchant.id || ''}`} onClick={event => { if (!merchant.id) { event.preventDefault(); onNavigate('products') } }}>View storefront <Icon name="arrow"/></a></article>
@@ -117,17 +131,20 @@ export function TrackingView({ order, business, connection, onRetry, onShare, on
   const copy = {
     Pending: ['Waiting for confirmation', 'Your order is waiting to be confirmed.'],
     Confirmed: ['Your order is confirmed', 'Complete payment to keep your order moving.'],
-    'Payment received': ['Payment received', 'Your seller can now prepare your order. The next update will appear here.'],
+    'Payment received': order.paymentStatus !== 'paid' ? ['Awaiting payment confirmation', 'No successful payment has been confirmed for this order.'] : order.paymentMode === 'test' ? ['Test payment confirmed', 'Your test order is ready for the next update. No real money was received.'] : ['Payment received', 'Your seller can now prepare your order. The next update will appear here.'],
     'Out for delivery': ['Your order is on the way', 'Your seller has marked this order as out for delivery.'],
     Delivered: ['Your order has arrived', 'Your seller has marked this order as delivered. Thank you for shopping.'],
     Cancelled: ['This order was cancelled', 'Contact your seller for help with this order or any payment already made.'],
   }
   const [title,detail] = copy[order.status] || ['Checking your order', 'We are loading the latest order status.']
+  // Delivery progress alone must never imply that a payment was verified.
+  const complete = index => index === 1 ? order.paymentStatus === 'paid' : index < position
   return <section className="ux-tracking"><div className="ux-heading"><div><small className="ux-eyebrow">{business}</small><h1>Track your order</h1><span className="ux-order-id">{order.id}</span></div><button className="ux-secondary" onClick={onShare}><Icon name="link"/>Save tracking link</button></div>
+    <PaymentModeNotice mode={order.paymentMode} paid={order.paymentStatus === 'paid'}/>
     {order.publicToken && order.paymentStatus === 'paid' && <div className="ux-protection-entry"><ProtectedPaymentsLink/><p className="ux-muted">Used protected payment? Confirm receipt or report an issue here.</p></div>}
     <div className="ux-tracking-grid"><article className="ux-panel ux-tracking-main"><div className={`ux-delivery-hero ${order.status === 'Cancelled' ? 'is-cancelled' : ''}`}><span className="ux-delivery-icon"><Icon name={order.status === 'Delivered' ? 'check' : order.status === 'Out for delivery' ? 'truck' : 'box'}/></span><h2 aria-live="polite">{title}</h2><p>{detail}</p></div>
       <div className="ux-sync" role="status"><span className={connection === 'offline' ? 'offline' : ''}/>{connection === 'offline' ? 'Connection interrupted. Showing the last update.' : 'This page checks for updates automatically.'}<button onClick={onRetry} className="ux-text">Refresh</button></div>
-      {order.status !== 'Cancelled' && <ol className="ux-progress">{steps.map((step,index) => <li key={step} className={index < position ? 'complete' : index === position ? 'current' : ''} aria-current={index === position ? 'step' : undefined}><span>{index < position ? <Icon name="check"/> : index + 1}</span><div><b>{step === 'Confirmed' ? 'Order confirmed' : step}</b><small>{index < position ? 'Completed' : index === position ? 'Current stage' : 'Next'}</small></div></li>)}</ol>}
+      {order.status !== 'Cancelled' && <ol className="ux-progress">{steps.map((step,index) => <li key={step} className={complete(index) ? 'complete' : index === position && index !== 1 ? 'current' : ''} aria-current={index === position ? 'step' : undefined}><span>{complete(index) ? <Icon name="check"/> : index + 1}</span><div><b>{step === 'Confirmed' ? 'Order confirmed' : index === 1 ? order.paymentStatus === 'refunded' ? 'Payment refunded' : order.paymentStatus !== 'paid' ? 'Awaiting payment' : order.paymentMode === 'test' ? 'Test payment confirmed' : step : step}</b><small>{complete(index) ? 'Completed' : index === position && index !== 1 ? 'Current stage' : 'Next'}</small></div></li>)}</ol>}
       {order.updatedAt && <p className="ux-updated">Last order update: {new Date(order.updatedAt).toLocaleString('en-NG', {dateStyle:'medium',timeStyle:'short'})}</p>}
       {['Pending','Confirmed'].includes(order.status) && ['unpaid','failed'].includes(order.paymentStatus) && <div className="ux-resume-payment"><button className="ux-primary" onClick={onPay}>Continue to payment <Icon name="arrow"/></button></div>}
     </article><aside><CheckoutSummary business={business} items={order.lineItems?.length ? order.lineItems : [{name:order.item,quantity:order.qty,unit_price:order.unitPrice}]} subtotal={Number(order.unitPrice) * Number(order.qty || 1)} delivery={order.deliveryFee} total={order.amount}/><article className="ux-help"><h2>Need a hand?</h2><p>Contact your seller about delivery or your order.</p><button className="ux-secondary" onClick={onContact}>Contact seller</button></article></aside></div>
@@ -135,3 +152,4 @@ export function TrackingView({ order, business, connection, onRetry, onShare, on
     <button className="ux-secondary ux-continue" onClick={onShop}>Continue shopping <Icon name="arrow"/></button>
   </section>
 }
+
