@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 
 export const money = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 })
 
@@ -51,12 +50,42 @@ export function ThemeToggle() {
   }}><Icon name={dark ? 'sun' : 'moon'}/></button>
 }
 
+function productPhotoSources(product) {
+  const sources = []
+  const add = value => {
+    if (Array.isArray(value)) {
+      value.forEach(add)
+      return
+    }
+    if (value && typeof value === 'object') {
+      add(value.url || value.publicUrl || value.public_url || value.image_url || value.src || value.path)
+      return
+    }
+    if (typeof value !== 'string') return
+    const valueText = value.trim()
+    if (!valueText) return
+    if (valueText.startsWith('[') || valueText.startsWith('{')) {
+      try { add(JSON.parse(valueText)); return } catch {}
+    }
+    if (!sources.includes(valueText)) sources.push(valueText)
+  }
+  add(product?.image_url)
+  add(product?.images)
+  add(product?.photo_url)
+  add(product?.photos)
+  add(product?.image)
+  add(product?.photo)
+  return sources
+}
+
 export function ProductPhoto({ product, className = '' }) {
-  const src = product?.image_url
-  const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [src])
+  const sources = productPhotoSources(product)
+  const sourceKey = sources.join('\\n')
+  const [imageIndex, setImageIndex] = useState(0)
+  useEffect(() => setImageIndex(0), [sourceKey])
+  const src = sources[imageIndex]
   return <div className={`ux-photo ${className}`}>
-    {src && !failed ? <Image src={src} alt={product.name || 'Product'} fill unoptimized sizes="(max-width: 600px) 50vw, 280px" onError={() => setFailed(true)}/> : <span className="ux-photo-empty"><Icon name="box"/><small>No photo yet</small></span>}
+    {src ? <img src={src} alt={product?.name || 'Product'} loading="lazy" decoding="async" onError={() => setImageIndex(index => index + 1)}/> : <span className="ux-photo-empty"><Icon name="box"/><small>No photo yet</small></span>}
   </div>
 }
 
