@@ -160,3 +160,9 @@ body:has(.buyer-auth){padding:24px;background:var(--ux-bg)}.buyer-auth{max-width
 [data-theme="dark"] .ux-payment-mode{background:#302a1c;border-color:#69552f;color:#f0dca7}
 .phone.experience .order>.ux-status{flex-shrink:0;font-size:11px}
 @media(max-width:600px){.phone.experience .order>.ux-status{margin-left:auto;max-width:100%;white-space:normal}}
+
+/* Keep merchant catalogue product photos visible inside their reserved image area. */
+.phone.experience .merchant-product-card .product-image {
+  height: 210px;
+  min-height: 210px;
+}
