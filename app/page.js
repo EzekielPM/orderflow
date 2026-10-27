@@ -251,8 +251,13 @@ export default function Home() {
   },[selected?.publicToken,screen])
 
   useEffect(() => {
-    const rememberedEmail = localStorage.getItem('orderflow-remembered-email')
-    if (rememberedEmail) setAuth(current => ({ ...current, email: rememberedEmail }))
+    // Remembered email is optional: storage restrictions must never block app startup.
+    try {
+      const rememberedEmail = window.localStorage.getItem('orderflow-remembered-email')
+      if (rememberedEmail) setAuth(current => ({ ...current, email: rememberedEmail }))
+    } catch {
+      // Continue normally when browser storage is unavailable.
+    }
     const params = new URLSearchParams(window.location.search)
     const hasPaymentReturn = params.has('reference')
     const hasPublicOrder = params.has('order') || params.has('track') || params.has('store')
